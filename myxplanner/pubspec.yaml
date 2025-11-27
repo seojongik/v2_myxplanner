@@ -1,0 +1,76 @@
+name: reservation_system
+description: 독립적으로 실행 가능한 예약 관리 시스템
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  
+  # 필수 의존성
+  intl: ^0.20.2
+  http: ^1.1.0
+  crypto: ^3.0.3
+  
+  # UI 관련
+  cupertino_icons: ^1.0.0
+  flutter_svg: ^2.0.7
+  table_calendar: ^3.0.9
+  
+  # State Management
+  provider: ^6.1.2
+  
+  # Firebase (최신 버전으로 업데이트 - 채널 에러 해결)
+  firebase_core: ^4.2.1
+  cloud_firestore: ^6.1.0
+  firebase_core_web: ^3.3.0
+  firebase_messaging: ^16.0.4
+  
+  # Country Picker (전화번호 입력용)
+  country_picker: ^2.0.26
+  
+  # WebView for address search
+  webview_flutter: ^4.4.2
+  
+  # URL launcher for external apps (카카오페이, 네이버페이 등)
+  url_launcher: ^6.3.1
+  
+  # Local storage (자동 로그인, 전화번호 저장용)
+  shared_preferences: ^2.2.2
+  
+  # 알림 (진동은 HapticFeedback 사용)
+  flutter_local_notifications: ^17.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  
+  # 앱 아이콘 및 기본 설정
+  generate: true
+  
+  # Assets 설정
+  assets:
+    - assets/images/
+
+# 앱 아이콘 설정
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/applogo.png"
+  min_sdk_android: 21 # Android 5.0+
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/applogo.png"
+  remove_alpha_ios: true # iOS App Store 제출을 위해 알파 채널 제거 

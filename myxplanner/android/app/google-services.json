@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "224974438083",
+    "project_id": "mgpfunctions",
+    "storage_bucket": "mgpfunctions.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:224974438083:android:3e69715c0dd1f054fcec76",
+        "android_client_info": {
+          "package_name": "mygolfplanner.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCP9L4ngwK0iiOINxXxyunSoG0xpboK8rs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

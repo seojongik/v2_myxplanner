@@ -1,0 +1,32 @@
+{
+  // Java 설정
+  "java.jdt.ls.java.home": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-21",
+      "path": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+      "default": true
+    }
+  ],
+  
+  // Python 설정
+  "python.defaultInterpreterPath": "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.languageServer": "None",
+  
+  // 코드 실행 설정
+  "code-runner.executorMap": {
+    "python": "python3 -u"
+  },
+  "code-runner.runInTerminal": true,
+  "code-runner.clearPreviousOutput": true,
+  "code-runner.saveFileBeforeRun": true,
+  "code-runner.showExecutionMessage": true,
+  "code-runner.enableAppInsights": false,
+  "code-runner.ignoreSelection": false,
+  "code-runner.respectShebang": true
+}
+
+

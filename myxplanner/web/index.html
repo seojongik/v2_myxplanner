@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="reservation_system">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>reservation_system</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!-- Firebase SDK v9+ (모듈 방식) -->
+  <script type="module">
+    // Firebase v9+ 모듈 import
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+    import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+    
+    // Firebase 설정
+    const firebaseConfig = {
+      apiKey: "AIzaSyAwsGmHtSWW9LdaO8R0I6wftQPkHtnUy94",
+      authDomain: "mgpfunctions.firebaseapp.com",
+      projectId: "mgpfunctions",
+      storageBucket: "mgpfunctions.firebasestorage.app",
+      messagingSenderId: "224974438083",
+      appId: "1:224974438083:web:5dfe79140a6fe10cfcec76",
+      measurementId: "G-0S32LNP1EL"
+    };
+    
+    console.log('🔥 Firebase v9+ JavaScript SDK 초기화 시작');
+    try {
+      // Firebase 앱 초기화
+      const app = initializeApp(firebaseConfig);
+      console.log('✅ Firebase v9+ 초기화 성공');
+      console.log('✅ Firebase 프로젝트 ID:', app.options.projectId);
+      
+      // Firestore 초기화
+      const db = getFirestore(app);
+      console.log('✅ Firestore v9+ 초기화 성공');
+      
+      // Flutter에서 호출할 수 있는 간단한 함수들 정의
+      window.firebaseReady = true;
+      window.firebaseApp = app;
+      window.firestoreDb = db;
+      
+      // 테스트 함수
+      window.testJSFunction = function(param1, param2) {
+        console.log('🧪 [JS] testJSFunction 호출됨');
+        console.log('🧪 [JS] param1:', param1);
+        console.log('🧪 [JS] param2:', param2);
+        return `테스트 성공: ${param1}, ${param2}`;
+      };
+      
+      // 문서 가져오기 함수 (Promise 반환)
+      window.getFirebaseDocument = async function(collection, docId) {
+        try {
+          console.log('🔍 [JS] getFirebaseDocument 호출됨!');
+          console.log('🔍 [JS] arguments 개수:', arguments.length);
+          console.log('🔍 [JS] collection 타입:', typeof collection, 'value:', collection);
+          console.log('🔍 [JS] docId 타입:', typeof docId, 'value:', docId);
+          
+          if (!collection || !docId) {
+            throw new Error(`Invalid parameters: collection=${collection}, docId=${docId}`);
+          }
+          
+          const docRef = doc(db, collection, docId);
+          console.log('🔍 [JS] docRef 생성 완료');
+          
+          const docSnap = await getDoc(docRef);
+          console.log('🔍 [JS] getDoc 완료, exists:', docSnap.exists());
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            console.log('✅ [JS] 문서 데이터:', data);
+            return { exists: true, data: data };
+          } else {
+            console.log('ℹ️ [JS] 문서 없음');
+            return { exists: false, data: null };
+          }
+        } catch (error) {
+          console.error('❌ [JS] getDocument 에러:', error);
+          throw error;
+        }
+      };
+      
+      // 임시 테스트 함수
+      window.testNewCode = function() {
+        console.log('🧪 [JS] 새 코드가 로드됨! 현재 시간:', new Date().toISOString());
+        return 'NEW_CODE_LOADED';
+      };
+
+      // 콜백 방식 문서 가져오기 함수
+      window.getFirebaseDocumentCallback = function(collection, docId, onSuccess, onError) {
+        console.log('🔍 [JS-NEW] getFirebaseDocumentCallback 호출됨 - 새 버전');
+        console.log('🔍 [JS-NEW] 전달받은 파라미터 - collection:', collection, 'docId:', docId);
+        console.log('🔍 [JS-NEW] 파라미터 타입 - collection:', typeof collection, 'docId:', typeof docId);
+
+        getFirebaseDocument(collection, docId)
+          .then(result => {
+            console.log('✅ [JS] 콜백 성공:', result);
+            console.log('🔍 [JS] result 타입:', typeof result);
+            console.log('🔍 [JS] result 상세:', result);
+
+            try {
+              // 안전한 JSON 변환
+              let jsonResult;
+              if (result && typeof result === 'object') {
+                // 객체인 경우 JSON.stringify 사용
+                jsonResult = JSON.stringify(result);
+                console.log('✅ [JS] JSON.stringify 성공:', jsonResult);
+              } else {
+                // 기본값 처리
+                jsonResult = JSON.stringify({ exists: false, data: null });
+                console.log('⚠️ [JS] 기본값 사용:', jsonResult);
+              }
+
+              onSuccess(jsonResult);
+            } catch (e) {
+              console.error('❌ [JS] JSON 변환 실패:', e);
+              const fallbackResult = JSON.stringify({ exists: false, data: null, error: 'JSON conversion failed' });
+              onSuccess(fallbackResult);
+            }
+          })
+          .catch(error => {
+            console.error('❌ [JS] 콜백 에러:', error);
+            onError(error.message || error.toString());
+          });
+      };
+      
+      // 동기 방식처럼 사용할 수 있는 래퍼
+      window.getFirebaseDocumentSync = function(collection, docId) {
+        console.log('🔍 [JS] getFirebaseDocumentSync 호출됨');
+        return getFirebaseDocument(collection, docId);
+      };
+      
+      // 문서 설정 함수
+      window.setFirebaseDocument = async function(collection, docId, data) {
+        try {
+          console.log('🔍 [JS] setFirebaseDocument 호출됨!');
+          console.log('🔍 [JS] collection:', collection);
+          console.log('🔍 [JS] docId:', docId);
+          console.log('🔍 [JS] data 타입:', typeof data);
+          console.log('🔍 [JS] data:', data);
+          
+          // JSON 문자열을 JavaScript 객체로 변환
+          let cleanData;
+          if (typeof data === 'string') {
+            // JSON 문자열로 전달된 경우
+            try {
+              cleanData = JSON.parse(data);
+              console.log('🔍 [JS] JSON 파싱 성공:', cleanData);
+            } catch (e) {
+              console.error('❌ [JS] JSON 파싱 실패:', e);
+              cleanData = {};
+            }
+          } else if (data && typeof data === 'object') {
+            // 객체로 전달된 경우 (기존 방식)
+            console.log('🔍 [JS] data keys:', Object.keys(data));
+            console.log('🔍 [JS] data entries:', Object.entries(data));
+            
+            // 수동으로 객체 복사
+            cleanData = {};
+            for (const key in data) {
+              if (data.hasOwnProperty(key)) {
+                cleanData[key] = data[key];
+              }
+            }
+            
+            // 추가로 Symbol을 통해 접근 시도
+            try {
+              const symbols = Object.getOwnPropertySymbols(data);
+              console.log('🔍 [JS] symbols:', symbols);
+              for (const symbol of symbols) {
+                const value = data[symbol];
+                console.log('🔍 [JS] symbol value:', value);
+                if (value && typeof value === 'object') {
+                  cleanData = {...value};
+                }
+              }
+            } catch (e) {
+              console.log('🔍 [JS] symbol 접근 실패:', e);
+            }
+            
+            console.log('🔍 [JS] cleanData:', cleanData);
+          } else {
+            cleanData = data;
+          }
+          
+          const docRef = doc(db, collection, docId);
+          console.log('🔍 [JS] docRef 생성 완료');
+          
+          await setDoc(docRef, cleanData);
+          console.log('✅ [JS] 문서 설정 성공');
+          
+          return { success: true };
+        } catch (error) {
+          console.error('❌ [JS] setDocument 에러:', error);
+          throw error;
+        }
+      };
+      
+      // 콜백 방식 문서 설정 함수
+      window.setFirebaseDocumentCallback = function(collection, docId, data, onSuccess, onError) {
+        console.log('🔍 [JS] setFirebaseDocumentCallback 호출됨');
+        
+        setFirebaseDocument(collection, docId, data)
+          .then(result => {
+            console.log('✅ [JS] 설정 콜백 성공:', result);
+            onSuccess(result);
+          })
+          .catch(error => {
+            console.error('❌ [JS] 설정 콜백 에러:', error);
+            onError(error.message || error.toString());
+          });
+      };
+      
+      // 메시지 스트림 함수
+      window.getMessagesStream = function(chatRoomId, onMessage, onError) {
+        try {
+          console.log('🔍 [JS] getMessagesStream 시작:', chatRoomId);
+          
+          const messagesRef = collection(db, 'messages');
+          const q = query(messagesRef, where('chatRoomId', '==', chatRoomId));
+          
+          // 실시간 리스너 설정
+          const unsubscribe = onSnapshot(q, (snapshot) => {
+            console.log('📨 [JS] onSnapshot 콜백 호출됨');
+            console.log('📨 [JS] snapshot.size:', snapshot.size);
+            
+            const messages = [];
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              console.log('📨 [JS] 원본 문서 데이터:', data);
+              
+              // 순수한 JavaScript 객체로 변환
+              const cleanMessage = {
+                id: doc.id,
+                chatRoomId: data.chatRoomId || '',
+                branchId: data.branchId || '',
+                senderId: data.senderId || '',
+                senderType: data.senderType || '',
+                senderName: data.senderName || '',
+                message: data.message || '',
+                isRead: data.isRead || false,
+                // timestamp를 ISO 문자열로 변환
+                timestamp: data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate().toISOString() : data.timestamp.toString()) : new Date().toISOString()
+              };
+              
+              console.log('📨 [JS] 정리된 메시지:', cleanMessage);
+              messages.push(cleanMessage);
+            });
+            
+            console.log('📨 [JS] 정렬 전 메시지 배열 길이:', messages.length);
+            
+            // 시간순 정렬 (ISO 문자열 비교)
+            messages.sort((a, b) => {
+              const aTime = new Date(a.timestamp).getTime();
+              const bTime = new Date(b.timestamp).getTime();
+              console.log('📨 [JS] 정렬 비교:', aTime, 'vs', bTime);
+              return aTime - bTime;
+            });
+            
+            console.log('📨 [JS] 정렬 후 메시지 배열:', messages);
+            console.log('📨 [JS] onMessage 콜백 호출 - 메시지 수:', messages.length);
+            
+            try {
+              // JSON 문자열로 변환해서 전달
+              const messagesJsonString = JSON.stringify(messages);
+              console.log('📨 [JS] JSON 문자열 변환:', messagesJsonString);
+              
+              onMessage(messagesJsonString);
+              console.log('✅ [JS] onMessage 콜백 완료');
+            } catch (e) {
+              console.error('❌ [JS] onMessage 콜백 에러:', e);
+            }
+          }, (error) => {
+            console.error('❌ [JS] 메시지 스트림 에러:', error);
+            onError(error.message || error.toString());
+          });
+          
+          return unsubscribe;
+        } catch (error) {
+          console.error('❌ [JS] getMessagesStream 에러:', error);
+          onError(error.message || error.toString());
+        }
+      };
+      
+      // 메시지 읽음 처리 함수
+      window.markMessagesAsReadCallback = function(chatRoomId, senderType, onSuccess, onError) {
+        console.log('📖 [JS] 메시지 읽음 처리 시작:', chatRoomId, senderType);
+        
+        (async () => {
+          try {
+            // 해당 채팅방의 읽지 않은 메시지들 조회
+            const messagesRef = collection(db, 'messages');
+            const q = query(
+              messagesRef, 
+              where('chatRoomId', '==', chatRoomId),
+              where('senderType', '==', senderType),
+              where('isRead', '==', false)
+            );
+            
+            const unreadSnapshot = await getDocs(q);
+            console.log('📖 [JS] 읽지 않은 메시지 수:', unreadSnapshot.size);
+            
+            if (unreadSnapshot.size === 0) {
+              console.log('📖 [JS] 읽지 않은 메시지가 없습니다');
+              onSuccess({ success: true, updatedCount: 0 });
+              return;
+            }
+            
+            // 배치로 모든 메시지를 읽음 처리
+            const batch = writeBatch(db);
+            let updateCount = 0;
+            
+            unreadSnapshot.forEach((doc) => {
+              batch.update(doc.ref, { isRead: true });
+              updateCount++;
+            });
+            
+            // 채팅방 읽지 않은 메시지 수 업데이트
+            const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+            const updateField = senderType === 'admin' ? 'memberUnreadCount' : 'adminUnreadCount';
+            batch.update(chatRoomRef, { [updateField]: 0 });
+            
+            await batch.commit();
+            console.log('✅ [JS] 메시지 읽음 처리 완료, 업데이트된 메시지 수:', updateCount);
+            
+            onSuccess({ success: true, updatedCount: updateCount });
+          } catch (error) {
+            console.error('❌ [JS] 메시지 읽음 처리 에러:', error);
+            onError(error.message || error.toString());
+          }
+        })();
+      };
+      
+      // 안읽은 메시지 수 스트림 함수
+      window.getUnreadCountStream = function(chatRoomId, onUpdate, onError) {
+        try {
+          console.log('🔔 [JS] 안읽은 메시지 수 스트림 시작:', chatRoomId);
+          
+          const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+          
+          // 실시간 리스너 설정
+          const unsubscribe = onSnapshot(chatRoomRef, (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data();
+              const unreadCount = data.memberUnreadCount || 0;
+              console.log('🔔 [JS] 안읽은 메시지 수 업데이트:', unreadCount);
+              onUpdate(unreadCount);
+            } else {
+              console.log('🔔 [JS] 채팅방이 존재하지 않음, 안읽은 메시지 수: 0');
+              onUpdate(0);
+            }
+          }, (error) => {
+            console.error('❌ [JS] 안읽은 메시지 수 스트림 에러:', error);
+            onError(error.message || error.toString());
+          });
+          
+          return unsubscribe;
+        } catch (error) {
+          console.error('❌ [JS] getUnreadCountStream 에러:', error);
+          onError(error.message || error.toString());
+        }
+      };
+      
+      // 메시지 전송 함수 (콜백 방식)
+      window.sendMessageCallback = function(chatRoomId, branchId, senderId, senderName, senderType, messageText, onSuccess, onError) {
+        console.log('📤 [JS] 메시지 전송 시작:', messageText);
+        
+        const messageId = `${branchId}_${senderId}_${Date.now()}`;
+        const messageData = {
+          id: messageId,
+          chatRoomId: chatRoomId,
+          branchId: branchId,
+          senderId: senderId,
+          senderType: senderType,
+          senderName: senderName,
+          message: messageText,
+          timestamp: new Date(),
+          isRead: false
+        };
+        
+        // 비동기 메시지 전송
+        (async () => {
+          try {
+            console.log('📤 [JS] 메시지 데이터 준비:', messageData);
+            
+            // 메시지 컬렉션에 추가
+            const messagesRef = collection(db, 'messages');
+            const docRef = await addDoc(messagesRef, messageData);
+            console.log('✅ [JS] 메시지 문서 생성 성공, ID:', docRef.id);
+            
+            // 채팅방 업데이트 - 기존 데이터 가져와서 업데이트
+            const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+            const chatRoomSnap = await getDoc(chatRoomRef);
+            
+            if (chatRoomSnap.exists()) {
+              const existingData = chatRoomSnap.data();
+              console.log('📤 [JS] 기존 채팅방 데이터:', existingData);
+              
+              const updatedData = {
+                ...existingData,
+                lastMessage: messageText,
+                lastMessageTime: new Date(),
+                adminUnreadCount: (existingData.adminUnreadCount || 0) + (senderType === 'member' ? 1 : 0)
+              };
+              
+              console.log('📤 [JS] 업데이트할 채팅방 데이터:', updatedData);
+              await setDoc(chatRoomRef, updatedData);
+              console.log('✅ [JS] 채팅방 업데이트 성공');
+            } else {
+              console.log('❌ [JS] 채팅방을 찾을 수 없음');
+            }
+            
+            console.log('✅ [JS] 메시지 전송 완전 성공');
+            onSuccess({ success: true });
+          } catch (error) {
+            console.error('❌ [JS] 메시지 전송 에러:', error);
+            console.error('❌ [JS] 에러 스택:', error.stack);
+            onError(error.message || error.toString());
+          }
+        })();
+      };
+      
+      console.log('✅ Firebase 전역 함수 설정 완료');
+      
+    } catch (error) {
+      console.error('❌ Firebase v9+ 초기화 실패:', error);
+    }
+  </script>
+  
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
