@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 채팅방 규칙
+    match /chatRooms/{chatRoomId} {
+      allow read: if request.auth != null || true; // 임시로 모두 읽기 허용
+      allow write: if request.auth != null || true; // 임시로 모두 쓰기 허용
+    }
+    
+    // 메시지 규칙
+    match /messages/{messageId} {
+      allow read: if request.auth != null || true; // 임시로 모두 읽기 허용
+      allow write: if request.auth != null || true; // 임시로 모두 쓰기 허용
+    }
+    
+    // FCM 토큰 규칙
+    match /fcmTokens/{tokenId} {
+      allow read: if request.auth != null || true; // 임시로 모두 읽기 허용
+      allow write: if request.auth != null || true; // 임시로 모두 쓰기 허용
+    }
+  }
+}
+

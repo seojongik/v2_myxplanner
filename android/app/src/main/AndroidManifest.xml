@@ -1,0 +1,101 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 인터넷 권한 (WebView 및 결제 기능에 필요) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    
+    <!-- 알림 권한 (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    
+    <!-- 진동 권한 (채팅 알림용) -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    
+    <application
+        android:label="MyGolfPlanner"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- 포트원 결제 리디렉션 URL 스키마 처리 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="mygolfplanner.app" android:host="payment"/>
+            </intent-filter>
+        </activity>
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+        
+        <!-- 카드사 앱 패키지 (Android 11+ 패키지 가시성 정책 대응) -->
+        <!-- 현대카드 -->
+        <package android:name="com.hyundaicard.appcard" />
+        <package android:name="com.hyundaicard.members" />
+        <package android:name="com.hyundaicard.app" />
+        <!-- KB카드 -->
+        <package android:name="com.kbcard.cxh.appcard" />
+        <!-- 신한카드 -->
+        <package android:name="com.shcard.smartpay" />
+        <package android:name="com.shinhancard.smartshinhan" />
+        <!-- 삼성카드 -->
+        <package android:name="kr.co.samsungcard.mpocket" />
+        <!-- 하나카드 -->
+        <package android:name="com.hanaskcard.paycla" />
+        <!-- 우리카드 -->
+        <package android:name="com.wooricard.smartapp" />
+        <!-- 롯데카드 -->
+        <package android:name="com.lcacApp" />
+        <!-- 농협카드 -->
+        <package android:name="nh.smart.nhallonepay" />
+        <!-- 씨티카드 -->
+        <package android:name="com.citibank.cardapp" />
+        <package android:name="kr.co.citibank.citimobile" />
+        
+        <!-- 간편결제 앱 -->
+        <package android:name="com.kakao.talk" /> <!-- 카카오페이 -->
+        <package android:name="com.nhnent.payapp" /> <!-- 페이코 -->
+        <package android:name="com.nhn.android.search" /> <!-- 네이버페이 -->
+        <package android:name="viva.republica.toss" /> <!-- 토스페이 -->
+        <package android:name="com.samsung.android.spay" /> <!-- 삼성페이 -->
+        <package android:name="com.samsung.android.spaylite" /> <!-- 삼성페이 -->
+        
+        <!-- 계좌이체 -->
+        <package android:name="com.kftc.bankpay.android" /> <!-- 뱅크페이 -->
+        
+        <!-- 기타 -->
+        <package android:name="kvp.jjy.MispAndroid320" /> <!-- ISP페이북 -->
+    </queries>
+</manifest>
