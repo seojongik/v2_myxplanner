@@ -12,6 +12,7 @@ import 'sp_step5_paying.dart';
 import 'sp_step6_group.dart';
 import 'sp_db_update.dart';
 import '../../../main_page.dart';
+import '../../../widgets/ad_banner_widget.dart';
 
 class SpStep0Structure extends StatefulWidget {
   final bool isAdminMode;
@@ -1260,9 +1261,24 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
       barrierDismissible: false,
       useRootNavigator: false,
       builder: (BuildContext context) {
-        return Dialog(
+        bool isButtonEnabled = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            // 2초 후 버튼 활성화 타이머
+            Future.delayed(Duration(seconds: 2), () {
+              if (!isButtonEnabled) {
+                setDialogState(() => isButtonEnabled = true);
+              }
+            });
+
+            return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Container(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Container(
             padding: EdgeInsets.all(24),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
@@ -1272,7 +1288,8 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
                 end: Alignment.bottomCenter,
               ),
             ),
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // 성공 아이콘
@@ -1328,7 +1345,15 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
                     ],
                   ),
                 ),
-                SizedBox(height: 24),
+                SizedBox(height: 8),
+
+                // 배너 광고
+                AdBannerWidget(
+                  onAdLoaded: () {
+                    setDialogState(() => isButtonEnabled = true);
+                  },
+                ),
+                SizedBox(height: 8),
 
                 // 확인 버튼
                 Container(
@@ -1337,20 +1362,22 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     gradient: LinearGradient(
-                      colors: [Color(0xFF00A86B), Color(0xFF00A86B).withOpacity(0.8)],
+                      colors: isButtonEnabled
+                        ? [Color(0xFF00A86B), Color(0xFF00A86B).withOpacity(0.8)]
+                        : [Colors.grey, Colors.grey.withOpacity(0.8)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    boxShadow: [
+                    boxShadow: isButtonEnabled ? [
                       BoxShadow(
                         color: Color(0xFF00A86B).withOpacity(0.3),
                         blurRadius: 10,
                         offset: Offset(0, 4),
                       ),
-                    ],
+                    ] : [],
                   ),
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: isButtonEnabled ? () {
                       // 다이얼로그 닫기
                       Navigator.of(context).pop();
 
@@ -1365,7 +1392,7 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
                           ),
                         ),
                       );
-                    },
+                    } : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
@@ -1385,7 +1412,11 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
                 ),
               ],
             ),
+            ),
           ),
+          ),
+        );
+          },
         );
       },
     );

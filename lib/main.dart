@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'firebase_options.dart';
 import 'services/sms_auth_service.dart';
 import 'pages/phone_auth/phone_input_page.dart';
@@ -43,7 +44,14 @@ void main() async {
     ]);
     print('✅ [STEP 1.5] 화면 방향 세로 모드로 고정 완료');
     debugPrint('✅ [STEP 1.5] 화면 방향 세로 모드로 고정 완료');
-    
+
+    // AdMob 초기화 (모바일만)
+    if (!kIsWeb) {
+      print('📢 [STEP 1.6] AdMob 초기화 시작');
+      await MobileAds.instance.initialize();
+      print('✅ [STEP 1.6] AdMob 초기화 완료');
+    }
+
     // 웹 환경에서 localStorage에서 로그인 상태 복원
     if (kIsWeb) {
       print('💾 [STEP 1.5] localStorage에서 로그인 상태 복원 시작');

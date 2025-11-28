@@ -13,6 +13,11 @@
         android:label="MyGolfPlanner"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- AdMob 앱 ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-9967217222063224~8938417671"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

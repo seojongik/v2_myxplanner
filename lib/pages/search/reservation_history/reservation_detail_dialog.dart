@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../../services/otp_service.dart';
 import '../../../services/api_service.dart';
+import '../../../config/admob_config.dart';
 import 'reservation_detail_ts_cancel.dart';
 import 'reservation_detail_ls_cancel.dart';
 import 'reservation_detail_sp_cancel.dart';
@@ -32,12 +34,51 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   Map<String, dynamic>? _couponPreview;
   Map<String, dynamic>? _issuedCouponPreview;
 
+  // 배너 광고
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
   @override
   void initState() {
     super.initState();
     _generateOTPIfNeeded();
     _initializeTabController();
     _loadTabData();
+    // 배너 광고는 context가 필요하므로 첫 프레임 이후 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadBannerAd();
+    });
+  }
+
+  void _loadBannerAd() async {
+    // 화면 너비에 맞는 적응형 배너 사이즈 가져오기
+    final width = MediaQuery.of(context).size.width.truncate();
+    final adSize = await AdSize.getAnchoredAdaptiveBannerAdSize(
+      Orientation.portrait,
+      width,
+    );
+
+    if (adSize == null) {
+      print('적응형 배너 사이즈를 가져올 수 없습니다');
+      return;
+    }
+
+    _bannerAd = BannerAd(
+      adUnitId: AdMobConfig.getBannerAdUnitId(isTest: true), // TODO: 배포 시 false로 변경
+      size: adSize,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() => _isBannerAdLoaded = true);
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          print('배너 광고 로드 실패: $error');
+        },
+      ),
+    )..load();
   }
   
   void _initializeTabController() {
@@ -113,6 +154,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   @override
   void dispose() {
     _tabController?.dispose();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -1516,14 +1558,10 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
     final isPast = date.isBefore(DateTime.now().subtract(const Duration(days: 1)));
 
     // 하단 네비게이션 바를 덮지 않도록 패딩 추가
-    final bottomNavBarHeight = 80.0; // 하단 네비게이션 바 높이
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomNavBarHeight),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.7,
+    return DraggableScrollableSheet(
+        initialChildSize: 0.9,
         minChildSize: 0.5,
-        maxChildSize: 0.9,
+        maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) {
           return Material(
@@ -1808,7 +1846,16 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                 ),
               ),
             ),
-            
+
+            // 배너 광고
+            if (_isBannerAdLoaded && _bannerAd != null)
+              Container(
+                width: double.infinity,
+                height: _bannerAd!.size.height.toDouble(),
+                color: Colors.white,
+                child: AdWidget(ad: _bannerAd!),
+              ),
+
             // 하단 버튼 영역
             Container(
               padding: const EdgeInsets.all(20),
@@ -1880,8 +1927,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
             ),
           );
         },
-      ),
-    );
+      );
   }
 
   Widget _buildInfoRow({

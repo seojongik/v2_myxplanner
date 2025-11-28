@@ -52,6 +52,9 @@ dependencies:
   # Supabase (DB 마이그레이션)
   supabase_flutter: ^2.8.0
 
+  # AdMob 광고
+  google_mobile_ads: ^5.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
