@@ -329,7 +329,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         whereConditions.add({
           'field': 'ts_status',
           'operator': 'IN',
-          'value': ['결제완료', '취소'],
+          'value': ['결제완료', '취소', '예약취소'],  // 예약취소도 포함
         });
       } else {
         whereConditions.add({
@@ -370,7 +370,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'programId': item['program_id']?.toString() ?? '',
         'programName': item['program_name']?.toString() ?? '',
         'memo': item['memo']?.toString() ?? '',
-        'isCancelled': item['ts_status'] == '취소',
+        'isCancelled': item['ts_status'] == '취소' || item['ts_status'] == '예약취소',
       }).toList();
     } else {
       whereConditions.add({
@@ -391,7 +391,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         whereConditions.add({
           'field': 'LS_status',
           'operator': 'IN',
-          'value': ['결제완료', '취소'],
+          'value': ['결제완료', '취소', '예약취소'],  // 예약취소도 포함
         });
       } else {
         whereConditions.add({
@@ -433,7 +433,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'billGameId': item['bill_game_id']?.toString() ?? '',
         'programName': item['program_name']?.toString() ?? '',
         'memo': item['memo']?.toString() ?? '',
-        'isCancelled': item['LS_status'] == '취소',
+        'isCancelled': item['LS_status'] == '취소' || item['LS_status'] == '예약취소',
       }).toList();
     }
   }
@@ -467,7 +467,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         whereConditions.add({
           'field': 'ts_status',
           'operator': 'IN',
-          'value': ['결제완료', '취소'],
+          'value': ['결제완료', '취소', '예약취소'],  // 예약취소도 포함
         });
       } else {
         whereConditions.add({
@@ -510,7 +510,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'programId': item['program_id']?.toString() ?? '',
         'programName': item['program_name']?.toString() ?? '',
         'memo': item['memo']?.toString() ?? '',
-        'isCancelled': item['ts_status'] == '취소',
+        'isCancelled': item['ts_status'] == '취소' || item['ts_status'] == '예약취소',
       }).toList();
     } else {
       whereConditions.add({
@@ -531,7 +531,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         whereConditions.add({
           'field': 'LS_status',
           'operator': 'IN',
-          'value': ['결제완료', '취소'],
+          'value': ['결제완료', '취소', '예약취소'],  // 예약취소도 포함
         });
       } else {
         whereConditions.add({
@@ -575,7 +575,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'billGameId': item['bill_game_id']?.toString() ?? '',
         'programName': item['program_name']?.toString() ?? '',
         'memo': item['memo']?.toString() ?? '',
-        'isCancelled': item['LS_status'] == '취소',
+        'isCancelled': item['LS_status'] == '취소' || item['LS_status'] == '예약취소',
       }).toList();
     }
   }
@@ -895,7 +895,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
     final dateStr = DateFormat('M월 d일').format(date);
     final dayOfWeek = DateFormat('EEEE', 'ko').format(date);
     final isToday = DateFormat('yyyy-MM-dd').format(date) == DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final isCancelled = reservation['status'] == '취소';
+    final isCancelled = reservation['status'] == '취소' || reservation['status'] == '예약취소';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1410,6 +1410,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
       case '결제완료':
         return Colors.green;
       case '취소':
+      case '예약취소':
         return Colors.red;
       case '노쇼':
         return Colors.orange;

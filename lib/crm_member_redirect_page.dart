@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../stubs/html_stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'services/api_service.dart';
+import 'services/supabase_adapter.dart';
 import 'main_page.dart';
 
 /// CRM에서 회원 페이지 예약앱 버튼 클릭 시 리다이렉트 처리
@@ -33,6 +34,22 @@ class _CrmMemberRedirectPageState extends State<CrmMemberRedirectPage> {
   Future<void> _loadMemberAndRedirect() async {
     try {
       print('🔄 CRM 회원 리다이렉트 시작');
+
+      // Supabase 초기화 확인 및 수행
+      if (ApiService.useSupabase) {
+        try {
+          print('🔄 Supabase 초기화 확인 중...');
+          await SupabaseAdapter.initialize();
+          print('✅ Supabase 초기화 완료');
+        } catch (e) {
+          print('❌ Supabase 초기화 실패: $e');
+          setState(() {
+            _errorMessage = 'Supabase 초기화 실패: $e';
+            _isLoading = false;
+          });
+          return;
+        }
+      }
 
       // URL에서 파라미터 추출
       final uri = Uri.parse(html.window.location.href);

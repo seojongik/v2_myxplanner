@@ -49,19 +49,35 @@ class _AdminBranchSelectPageState extends State<AdminBranchSelectPage>
   }
 
   void _initCardAnimations() {
+    final itemCount = _branches.length;
+    if (itemCount == 0) {
+      _cardAnimations = [];
+      return;
+    }
+    
+    // 각 아이템의 애니메이션 구간 계산 (0.0 ~ 1.0 범위 내로 제한)
+    final maxItems = itemCount.clamp(1, 10);
+    final intervalStep = 0.6 / maxItems;
+    
     _cardAnimations = List.generate(
-      _branches.length,
-      (index) => Tween<Offset>(
-        begin: Offset(0, 0.5),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: _slideController,
-        curve: Interval(
-          index * 0.1,
-          (index * 0.1) + 0.5,
-          curve: Curves.easeOutCubic,
-        ),
-      )),
+      itemCount,
+      (index) {
+        // 인덱스가 클수록 나중에 애니메이션 시작
+        final start = (index * intervalStep).clamp(0.0, 0.7);
+        final end = (start + 0.3).clamp(start + 0.1, 1.0);
+        
+        return Tween<Offset>(
+          begin: Offset(0, 0.5),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: _slideController,
+          curve: Interval(
+            start,
+            end,
+            curve: Curves.easeOutCubic,
+          ),
+        ));
+      },
     );
     _slideController.forward();
   }

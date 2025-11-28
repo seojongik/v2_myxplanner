@@ -356,7 +356,8 @@ class _MembershipSearchContentState extends State<MembershipSearchContent> {
         final contractHistoryId = entry.key;
         final latestBill = entry.value;
         final balance = int.tryParse(latestBill['bill_balance_min_after']?.toString() ?? '0') ?? 0;
-        final expiryDateStr = latestBill['contract_TS_min_expiry_date']?.toString() ?? '';
+        // Supabase는 소문자로 반환
+        final expiryDateStr = (latestBill['contract_ts_min_expiry_date'] ?? latestBill['contract_TS_min_expiry_date'])?.toString() ?? '';
 
         final expiryDate = DateTime.tryParse(expiryDateStr);
         final now = DateTime.now();
@@ -711,7 +712,8 @@ class _MembershipSearchContentState extends State<MembershipSearchContent> {
 
           if (timeBills.isNotEmpty) {
             timeBalance = timeBills[0]['bill_balance_min_after']?.toString() ?? '0';
-            timeExpiryDate = timeBills[0]['contract_TS_min_expiry_date'] ?? '';
+            // Supabase는 소문자로 반환
+            timeExpiryDate = timeBills[0]['contract_ts_min_expiry_date'] ?? timeBills[0]['contract_TS_min_expiry_date'] ?? '';
           }
         } catch (e) {
           print('시간권 잔액 조회 실패: $e');

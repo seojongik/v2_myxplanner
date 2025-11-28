@@ -68,8 +68,8 @@ class _AdminMemberSelectPageState extends State<AdminMemberSelectPage>
       ).animate(CurvedAnimation(
         parent: _slideController,
         curve: Interval(
-          index * 0.05,
-          (index * 0.05) + 0.3,
+          (index * 0.05).clamp(0.0, 1.0), // Clamp start value
+          ((index * 0.05) + 0.3).clamp(0.0, 1.0), // Clamp end value
           curve: Curves.easeOutCubic,
         ),
       )),
@@ -598,8 +598,10 @@ class _AdminMemberSelectPageState extends State<AdminMemberSelectPage>
       itemCount: _filteredMembers.length,
       itemBuilder: (context, index) {
         final member = _filteredMembers[index];
+        final memberId = member['member_id']?.toString() ?? 'member_$index';
         
         return SlideTransition(
+          key: ValueKey('member_card_$memberId'),
           position: _cardAnimations.isNotEmpty && index < _cardAnimations.length
               ? _cardAnimations[index]
               : AlwaysStoppedAnimation(Offset.zero),

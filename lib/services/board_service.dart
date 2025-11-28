@@ -1,9 +1,7 @@
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '../models/board_model.dart';
+import 'api_service.dart';
 
 class BoardService {
-  static const String baseUrl = 'https://autofms.mycafe24.com/dynamic_api.php';
   static Future<List<BoardModel>> getBoardList({
     required String branchId,
     String? boardType,
@@ -11,7 +9,7 @@ class BoardService {
     int limit = 20,
   }) async {
     try {
-      final whereConditions = [
+      final whereConditions = <Map<String, dynamic>>[
         {'field': 'branch_id', 'operator': '=', 'value': branchId}
       ];
       
@@ -23,32 +21,18 @@ class BoardService {
         });
       }
 
-      final requestData = {
-        'operation': 'get',
-        'table': 'v2_board_by_member',
-        'fields': ['*'],
-        'where': whereConditions,
-        'orderBy': [
+      final data = await ApiService.getData(
+        table: 'v2_board_by_member',
+        fields: ['*'],
+        where: whereConditions,
+        orderBy: [
           {'field': 'created_at', 'direction': 'DESC'}
         ],
-        'limit': limit,
-        'offset': (page - 1) * limit,
-      };
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestData),
+        limit: limit,
+        offset: (page - 1) * limit,
       );
       
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        if (jsonData['success'] == true) {
-          final List<dynamic> boardData = jsonData['data'] ?? [];
-          return boardData.map((item) => BoardModel.fromJson(item)).toList();
-        }
-      }
-      return [];
+      return data.map((item) => BoardModel.fromJson(item)).toList();
     } catch (e) {
       print('Error fetching board list: $e');
       return [];
@@ -60,27 +44,17 @@ class BoardService {
     required int memberboardId,
   }) async {
     try {
-      final requestData = {
-        'operation': 'get',
-        'table': 'v2_board_by_member',
-        'fields': ['*'],
-        'where': [
+      final data = await ApiService.getData(
+        table: 'v2_board_by_member',
+        fields: ['*'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'memberboard_id', 'operator': '=', 'value': memberboardId}
         ],
-      };
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestData),
       );
       
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        if (jsonData['success'] == true && jsonData['data'] != null && jsonData['data'].isNotEmpty) {
-          return BoardModel.fromJson(jsonData['data'][0]);
-        }
+      if (data.isNotEmpty) {
+        return BoardModel.fromJson(data[0]);
       }
       return null;
     } catch (e) {
@@ -98,37 +72,20 @@ class BoardService {
       print('branchId: $branchId');
       print('memberboardId: $memberboardId');
 
-      final requestData = {
-        'operation': 'get',
-        'table': 'v2_board_by_member_replies',
-        'fields': ['*'],
-        'where': [
+      final data = await ApiService.getData(
+        table: 'v2_board_by_member_replies',
+        fields: ['*'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'memberboard_id', 'operator': '=', 'value': memberboardId}
         ],
-        'orderBy': [
+        orderBy: [
           {'field': 'created_at', 'direction': 'ASC'}
         ],
-      };
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestData),
       );
       
-      print('댓글 조회 응답: ${response.statusCode}');
-      print('댓글 조회 응답 body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        if (jsonData['success'] == true) {
-          final List<dynamic> replyData = jsonData['data'] ?? [];
-          print('댓글 데이터: $replyData');
-          return replyData.map((item) => BoardReplyModel.fromJson(item)).toList();
-        }
-      }
-      return [];
+      print('댓글 데이터: $data');
+      return data.map((item) => BoardReplyModel.fromJson(item)).toList();
     } catch (e) {
       print('Error fetching board replies: $e');
       return [];
@@ -155,7 +112,7 @@ class BoardService {
       print('postStatus: $postStatus');
       print('postDueDate: $postDueDate');
 
-      final data = {
+      final data = <String, dynamic>{
         'branch_id': branchId,
         'member_id': memberId,
         'member_name': memberName,
@@ -174,38 +131,15 @@ class BoardService {
         data['post_due_date'] = postDueDate.toIso8601String();
       }
 
-      final requestData = {
-        'operation': 'add',
-        'table': 'v2_board_by_member',
-        'data': data,
-      };
+      print('Request data: $data');
 
-      print('Request data: ${json.encode(requestData)}');
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Accept': 'application/json',
-        },
-        body: json.encode(requestData),
+      final result = await ApiService.addData(
+        table: 'v2_board_by_member',
+        data: data,
       );
       
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        print('Parsed JSON: $jsonData');
-        final success = jsonData['success'] == true;
-        if (!success) {
-          print('API 응답 실패: ${jsonData['error'] ?? '알 수 없는 오류'}');
-        }
-        return success;
-      } else {
-        print('HTTP 오류: ${response.statusCode} - ${response.body}');
-        return false;
-      }
+      print('API 응답: $result');
+      return result['success'] == true;
     } catch (e, stackTrace) {
       print('Error creating board: $e');
       print('Stack trace: $stackTrace');
@@ -223,7 +157,7 @@ class BoardService {
     DateTime? postDueDate,
   }) async {
     try {
-      final data = {
+      final data = <String, dynamic>{
         'title': title,
         'content': content,
         'updated_at': DateTime.now().toIso8601String(),
@@ -237,28 +171,17 @@ class BoardService {
         data['post_due_date'] = postDueDate.toIso8601String();
       }
 
-      final requestData = {
-        'operation': 'update',
-        'table': 'v2_board_by_member',
-        'data': data,
-        'where': [
+      final result = await ApiService.updateData(
+        table: 'v2_board_by_member',
+        data: data,
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'memberboard_id', 'operator': '=', 'value': memberboardId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
         ],
-      };
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestData),
       );
       
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        return jsonData['success'] == true;
-      }
-      return false;
+      return result['success'] == true;
     } catch (e) {
       print('Error updating board: $e');
       return false;
@@ -271,27 +194,16 @@ class BoardService {
     required String memberId,
   }) async {
     try {
-      final requestData = {
-        'operation': 'delete',
-        'table': 'v2_board_by_member',
-        'where': [
+      final result = await ApiService.deleteData(
+        table: 'v2_board_by_member',
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'memberboard_id', 'operator': '=', 'value': memberboardId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
         ],
-      };
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestData),
       );
       
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        return jsonData['success'] == true;
-      }
-      return false;
+      return result['success'] == true;
     } catch (e) {
       print('Error deleting board: $e');
       return false;
@@ -312,48 +224,25 @@ class BoardService {
       print('memberId: $memberId');
       print('content: $content');
 
-      final data = {
+      final data = <String, dynamic>{
         'branch_id': branchId,
         'memberboard_id': memberboardId,
         'member_id': memberId,
         'member_name': memberName,
-        'reply_by_member': content, // 댓글 내용
+        'reply_by_member': content,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      final requestData = {
-        'operation': 'add',
-        'table': 'v2_board_by_member_replies',
-        'data': data,
-      };
+      print('Request data: $data');
 
-      print('Request data: ${json.encode(requestData)}');
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Accept': 'application/json',
-        },
-        body: json.encode(requestData),
+      final result = await ApiService.addData(
+        table: 'v2_board_by_member_replies',
+        data: data,
       );
       
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        print('Parsed JSON: $jsonData');
-        final success = jsonData['success'] == true;
-        if (!success) {
-          print('댓글 등록 실패: ${jsonData['error'] ?? '알 수 없는 오류'}');
-        }
-        return success;
-      } else {
-        print('HTTP 오류: ${response.statusCode} - ${response.body}');
-        return false;
-      }
+      print('API 응답: $result');
+      return result['success'] == true;
     } catch (e, stackTrace) {
       print('Error creating reply: $e');
       print('Stack trace: $stackTrace');
@@ -367,27 +256,16 @@ class BoardService {
     required String memberId,
   }) async {
     try {
-      final requestData = {
-        'operation': 'delete',
-        'table': 'v2_board_by_member_replies',
-        'where': [
+      final result = await ApiService.deleteData(
+        table: 'v2_board_by_member_replies',
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'memberboard_id', 'operator': '=', 'value': memberboardId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
         ],
-      };
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestData),
       );
       
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        return jsonData['success'] == true;
-      }
-      return false;
+      return result['success'] == true;
     } catch (e) {
       print('Error deleting reply: $e');
       return false;

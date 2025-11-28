@@ -141,10 +141,10 @@ class _ContractListPageContentState extends State<ContractListPageContent> {
     final contractName = contract['contract_name'] ?? '';
     final price = contract['price'] ?? 0;
 
-    // 서비스 정보 추출
+    // 서비스 정보 추출 (Supabase는 소문자로 반환)
     final contractCredit = _safeParseInt(contract['contract_credit']);
-    final contractLSMin = _safeParseInt(contract['contract_LS_min']);
-    final contractTSMin = _safeParseInt(contract['contract_TS_min']);
+    final contractLSMin = _safeParseInt(contract['contract_ls_min'] ?? contract['contract_LS_min']);
+    final contractTSMin = _safeParseInt(contract['contract_ts_min'] ?? contract['contract_TS_min']);
     final contractGames = _safeParseInt(contract['contract_games']);
     final contractTermMonth = _safeParseInt(contract['contract_term_month']);
 

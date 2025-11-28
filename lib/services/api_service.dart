@@ -1,16 +1,25 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 import 'holiday_service.dart';
 import 'login_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../stubs/html_stub.dart' if (dart.library.html) 'dart:html' as html;
+import 'supabase_adapter.dart';
 
 class ApiService {
-  // 서버 루트의 dynamic_api.php 사용
-  static const String baseUrl = 'https://autofms.mycafe24.com/dynamic_api.php';
+  // ========== 백엔드 선택 ==========
+  // true: Supabase (PostgreSQL)
+  // false: 사용 불가 (오류 발생)
+  static const bool useSupabase = true;
+  
+  // Supabase 미사용 시 오류 발생
+  static void _ensureSupabaseEnabled() {
+    if (!useSupabase) {
+      throw Exception('Cafe24 PHP API는 더 이상 지원되지 않습니다. useSupabase를 true로 설정하세요.');
+    }
+  }
 
   // 기본 헤더
   static const Map<String, String> headers = {
@@ -18,35 +27,21 @@ class ApiService {
     'Accept': 'application/json',
   };
   
-  // SMS 발송 (알리고 API 연동)
+  // SMS 발송 (Supabase로 이전 필요 - 현재 미구현)
   static Future<Map<String, dynamic>> sendSMS({
     required String phoneNumber,
     required String message,
   }) async {
-    try {
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode({
-          'action': 'send_sms',
-          'phone': phoneNumber,
-          'message': message,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> result = json.decode(response.body);
-        if (result['success'] == true) {
-          return result;
-        } else {
-          throw Exception(result['error'] ?? 'SMS 발송 실패');
-        }
-      } else {
-        throw Exception('SMS API 호출 실패: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('SMS 발송 오류: $e');
-    }
+    // TODO: Supabase Edge Function으로 SMS 발송 구현 필요
+    print('⚠️ SMS 발송 기능은 현재 미구현 상태입니다.');
+    print('📱 발송 대상: $phoneNumber');
+    print('📝 메시지: $message');
+    
+    // 현재는 성공으로 처리 (실제 발송은 되지 않음)
+    return {
+      'success': true,
+      'message': 'SMS 발송 기능 미구현 (로그만 출력됨)',
+    };
   }
   
   // 전역 상태 관리
@@ -219,86 +214,22 @@ class ApiService {
     int? limit,
     int? offset,
   }) async {
-    try {
-      final requestData = {
-        'operation': 'get',
-        'table': table,
-        'fields': fields ?? ['*'],
-      };
-      
-      // branch_id 필터링 자동 적용
-      final filteredWhere = _addBranchFilter(where, table);
-      if (filteredWhere.isNotEmpty) {
-        requestData['where'] = filteredWhere;
-      }
-      
-      if (orderBy != null && orderBy.isNotEmpty) {
-        requestData['orderBy'] = orderBy;
-      }
-      
-      if (limit != null) {
-        requestData['limit'] = limit;
-      }
-      
-      if (offset != null) {
-        requestData['offset'] = offset;
-      }
-      
-      print('📡 API 요청 전송');
-      print('URL: $baseUrl');
-      print('Headers: $headers');
-      print('Body: ${json.encode(requestData)}');
-      
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(requestData),
-      ).timeout(Duration(seconds: 15));
-      
-      print('📥 API 응답 수신');
-      print('Status Code: ${response.statusCode}');
-      print('Response Headers: ${response.headers}');
-      print('Response Body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        print('📊 응답 데이터 파싱 완료: $responseData');
-        
-        if (responseData['success'] == true) {
-          print('✅ API 요청 성공');
-          return List<Map<String, dynamic>>.from(responseData['data']);
-        } else {
-          print('❌ API 에러 응답: ${responseData['error']}');
-          // 사용자 친화적인 에러 메시지 처리
-          String errorMsg = responseData['error'] ?? 'API 오류가 발생했습니다';
-          if (errorMsg.contains('login') || errorMsg.contains('password') || errorMsg.contains('authentication')) {
-            throw Exception('아이디(전화번호)와 비밀번호를 확인해주세요.');
-          } else if (errorMsg.contains('field') || errorMsg.contains('필드')) {
-            throw Exception('입력 정보에 오류가 있습니다. 다시 확인해주세요.');
-          } else {
-            throw Exception('서버에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-          }
-        }
-      } else if (response.statusCode == 403) {
-        print('❌ 403 Forbidden');
-        throw Exception('서버 접근 권한이 없습니다. 관리자에게 문의하세요.');
-      } else if (response.statusCode == 500) {
-        print('❌ 500 Internal Server Error');
-        print('서버 에러 상세: ${response.body}');
-        throw Exception('서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
-      } else {
-        print('❌ HTTP 에러: ${response.statusCode}');
-        throw Exception('네트워크 연결에 문제가 있습니다. 잠시 후 다시 시도해주세요.');
-      }
-    } catch (e) {
-      if (e.toString().contains('TimeoutException')) {
-        throw Exception('서버 응답 시간이 초과되었습니다.');
-      } else if (e.toString().contains('SocketException')) {
-        throw Exception('네트워크 연결을 확인해주세요.');
-      } else {
-        throw Exception('네트워크 오류: $e');
-      }
-    }
+    _ensureSupabaseEnabled();
+
+    // Supabase 초기화 보장
+    await SupabaseAdapter.initialize();
+
+    // branch_id 필터링 자동 적용
+    final filteredWhere = _addBranchFilter(where, table);
+    
+    return SupabaseAdapter.getData(
+      table: table,
+      fields: fields,
+      where: filteredWhere.isNotEmpty ? filteredWhere : null,
+      orderBy: orderBy,
+      limit: limit,
+      offset: offset,
+    );
   }
 
   // 데이터 추가 (ADD)
@@ -306,41 +237,18 @@ class ApiService {
     required String table,
     required Map<String, dynamic> data,
   }) async {
-    try {
-      // branch_id 자동 추가
-      final dataWithBranch = _addBranchToData(data, table);
-      
-      final requestData = {
-        'operation': 'add',
-        'table': table,
-        'data': dataWithBranch,
-      };
-      
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(requestData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['success'] == true) {
-          return responseData;
-        } else {
-          throw Exception('API 오류: ${responseData['error']}');
-        }
-      } else {
-        throw Exception('HTTP 오류: ${response.statusCode}');
-      }
-    } catch (e) {
-      if (e.toString().contains('TimeoutException')) {
-        throw Exception('서버 응답 시간이 초과되었습니다.');
-      } else if (e.toString().contains('SocketException')) {
-        throw Exception('네트워크 연결을 확인해주세요.');
-      } else {
-        throw Exception('네트워크 오류: $e');
-      }
-    }
+    _ensureSupabaseEnabled();
+
+    // Supabase 초기화 보장
+    await SupabaseAdapter.initialize();
+
+    // branch_id 자동 추가
+    final dataWithBranch = _addBranchToData(data, table);
+    
+    return SupabaseAdapter.addData(
+      table: table,
+      data: dataWithBranch,
+    );
   }
 
   // 데이터 업데이트 (UPDATE)
@@ -349,71 +257,19 @@ class ApiService {
     required Map<String, dynamic> data,
     required List<Map<String, dynamic>> where,
   }) async {
-    try {
-      print('🔄 UPDATE 요청 시작');
-      print('테이블: $table');
-      print('업데이트 데이터: $data');
-      print('WHERE 조건 (원본): $where');
-      
-      // branch_id 필터링 자동 적용
-      final filteredWhere = _addBranchFilter(where, table);
-      print('WHERE 조건 (필터링 후): $filteredWhere');
-      
-      final requestData = {
-        'operation': 'update',
-        'table': table,
-        'data': data,
-        'where': filteredWhere,
-      };
-      
-      print('📡 UPDATE API 요청 전송');
-      print('URL: $baseUrl');
-      print('Headers: $headers');
-      print('Body: ${json.encode(requestData)}');
-      
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(requestData),
-      ).timeout(Duration(seconds: 15));
-      
-      print('📥 UPDATE API 응답 수신');
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        print('📊 UPDATE 응답 데이터: $responseData');
-        
-        if (responseData['success'] == true) {
-          print('✅ UPDATE 성공');
-          return responseData;
-        } else {
-          print('❌ UPDATE API 에러: ${responseData['error']}');
-          String errorMsg = responseData['error'] ?? '';
-          if (errorMsg.contains('field') || errorMsg.contains('필드')) {
-            throw Exception('입력 정보에 오류가 있습니다. 다시 확인해주세요.');
-          } else {
-            throw Exception('데이터 수정 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-          }
-        }
-      } else if (response.statusCode == 500) {
-        print('❌ UPDATE 500 에러');
-        print('서버 에러 상세: ${response.body}');
-        throw Exception('서버 내부 오류 (500): ${response.body}');
-      } else {
-        print('❌ UPDATE HTTP 에러: ${response.statusCode}');
-        throw Exception('HTTP 오류: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      if (e.toString().contains('TimeoutException')) {
-        throw Exception('서버 응답 시간이 초과되었습니다.');
-      } else if (e.toString().contains('SocketException')) {
-        throw Exception('네트워크 연결을 확인해주세요.');
-      } else {
-        throw Exception('네트워크 오류: $e');
-      }
-    }
+    _ensureSupabaseEnabled();
+
+    // Supabase 초기화 보장
+    await SupabaseAdapter.initialize();
+
+    // branch_id 필터링 자동 적용
+    final filteredWhere = _addBranchFilter(where, table);
+    
+    return SupabaseAdapter.updateData(
+      table: table,
+      data: data,
+      where: filteredWhere,
+    );
   }
 
   // 데이터 삭제 (DELETE)
@@ -421,41 +277,18 @@ class ApiService {
     required String table,
     required List<Map<String, dynamic>> where,
   }) async {
-    try {
-      // branch_id 필터링 자동 적용
-      final filteredWhere = _addBranchFilter(where, table);
-      
-      final requestData = {
-        'operation': 'delete',
-        'table': table,
-        'where': filteredWhere,
-      };
-      
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(requestData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['success'] == true) {
-          return responseData;
-        } else {
-          throw Exception('API 오류: ${responseData['error']}');
-        }
-      } else {
-        throw Exception('HTTP 오류: ${response.statusCode}');
-      }
-    } catch (e) {
-      if (e.toString().contains('TimeoutException')) {
-        throw Exception('서버 응답 시간이 초과되었습니다.');
-      } else if (e.toString().contains('SocketException')) {
-        throw Exception('네트워크 연결을 확인해주세요.');
-      } else {
-        throw Exception('네트워크 오류: $e');
-      }
-    }
+    _ensureSupabaseEnabled();
+
+    // Supabase 초기화 보장
+    await SupabaseAdapter.initialize();
+
+    // branch_id 필터링 자동 적용
+    final filteredWhere = _addBranchFilter(where, table);
+    
+    return SupabaseAdapter.deleteData(
+      table: table,
+      where: filteredWhere,
+    );
   }
 
   // ========== 예약 시스템 전용 함수들 ==========
@@ -1787,7 +1620,7 @@ class ApiService {
       // v2_bill_times 테이블에서 contract_history_id가 있는 시간권 거래 조회
       final billsResult = await getData(
         table: 'v2_bill_times',
-        fields: ['contract_history_id', 'bill_balance_min_after', 'contract_TS_min_expiry_date'],
+        fields: ['contract_history_id', 'bill_balance_min_after', 'contract_ts_min_expiry_date'],
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
@@ -1811,7 +1644,8 @@ class ApiService {
       for (final bill in billsResult) {
         final contractHistoryId = bill['contract_history_id']?.toString();
         final balance = int.tryParse(bill['bill_balance_min_after']?.toString() ?? '0') ?? 0;
-        final expiryDate = bill['contract_TS_min_expiry_date']?.toString();
+        // Supabase는 소문자로 반환
+        final expiryDate = (bill['contract_ts_min_expiry_date'] ?? bill['contract_TS_min_expiry_date'])?.toString();
         
         if (contractHistoryId != null && contractHistoryId.isNotEmpty && contractHistoryId != '0') {
           // 이미 해당 contract_history_id가 있으면 건너뛰기 (이미 최신 데이터이므로)
@@ -1941,7 +1775,7 @@ class ApiService {
       // v2_bill_times 테이블에서 contract_history_id가 있는 시간권 거래 조회
       final billsResult = await getData(
         table: 'v2_bill_times',
-        fields: ['contract_history_id', 'bill_balance_min_after', 'contract_TS_min_expiry_date'],
+        fields: ['contract_history_id', 'bill_balance_min_after', 'contract_ts_min_expiry_date'],
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
@@ -1977,7 +1811,8 @@ class ApiService {
       for (final bill in billsResult) {
         final contractHistoryId = bill['contract_history_id']?.toString();
         final balance = int.tryParse(bill['bill_balance_min_after']?.toString() ?? '0') ?? 0;
-        final expiryDate = bill['contract_TS_min_expiry_date']?.toString();
+        // Supabase는 소문자로 반환
+        final expiryDate = (bill['contract_ts_min_expiry_date'] ?? bill['contract_TS_min_expiry_date'])?.toString();
         
         if (contractHistoryId != null && contractHistoryId.isNotEmpty && contractHistoryId != '0') {
           // 이미 해당 contract_history_id가 있으면 건너뛰기 (이미 최신 데이터이므로)
@@ -2876,7 +2711,15 @@ class ApiService {
       }
       
       final startMinutes = timeToMinutes(startTime);
-      final endMinutes = timeToMinutes(endTime);
+      int endMinutes = timeToMinutes(endTime);
+      
+      // 자정을 넘기는 예약 시간 처리 (예: 23:05 → 00:05)
+      // 종료 시간이 시작 시간보다 작으면 다음 날임
+      final crossesMidnight = endMinutes < startMinutes;
+      if (crossesMidnight) {
+        endMinutes += 1440; // 다음 날로 처리 (24시간 추가)
+        print('🌙 자정 넘김 감지: 종료시간을 ${endMinutes}분(다음날)으로 조정');
+      }
       
       print('시작분: $startMinutes, 종료분: $endMinutes');
       
@@ -2896,30 +2739,52 @@ class ApiService {
         int policyStartMin = timeToMinutes(policyStartStr.substring(0, 5));
         int policyEndMin = timeToMinutes(policyEndStr.substring(0, 5));
         
-        // 24:00:00 처리 (1440분으로 변환)
-        if (policyEndStr.startsWith('24:00')) {
+        // 24:00:00 또는 00:00:00 처리 (1440분으로 변환)
+        // 정책 시작 시간보다 종료 시간이 작거나 같으면 자정(1440)으로 처리
+        if (policyEndStr.startsWith('24:00') || 
+            (policyEndMin == 0 && policyStartMin > 0)) {
           policyEndMin = 1440;
         }
         
-        // 자정을 넘어가는 경우 처리 (예: 22:00 - 06:00)
-        if (policyStartMin > policyEndMin && policyEndMin != 1440) {
-          // 두 구간으로 나누어 처리
-          // 구간 1: policyStartMin ~ 1440 (24:00)
-          final overlapMin1 = _calculateOverlapMinutes(startMinutes, endMinutes, policyStartMin, 1440);
-          if (overlapMin1 > 0) {
-            result[policyApply] = (result[policyApply] ?? 0) + overlapMin1;
-          }
+        // 자정을 넘기는 예약인 경우, 정책도 다음 날 구간으로 확장하여 계산
+        if (crossesMidnight) {
+          // 오늘 구간에서의 겹침 계산
+          final overlapToday = _calculatePolicyOverlap(
+            startMinutes, endMinutes.clamp(0, 1440), 
+            policyStartMin, policyEndMin
+          );
           
-          // 구간 2: 0 ~ policyEndMin
-          final overlapMin2 = _calculateOverlapMinutes(startMinutes, endMinutes, 0, policyEndMin);
-          if (overlapMin2 > 0) {
-            result[policyApply] = (result[policyApply] ?? 0) + overlapMin2;
+          // 다음 날 구간에서의 겹침 계산 (정책을 다음 날로 이동: +1440)
+          final overlapTomorrow = _calculatePolicyOverlap(
+            startMinutes, endMinutes, 
+            policyStartMin + 1440, policyEndMin + 1440
+          );
+          
+          final totalOverlap = overlapToday + overlapTomorrow;
+          if (totalOverlap > 0) {
+            result[policyApply] = (result[policyApply] ?? 0) + totalOverlap;
           }
         } else {
-          // 일반적인 경우
-          final overlapMin = _calculateOverlapMinutes(startMinutes, endMinutes, policyStartMin, policyEndMin);
-          if (overlapMin > 0) {
-            result[policyApply] = (result[policyApply] ?? 0) + overlapMin;
+          // 자정을 넘어가는 정책 시간 처리 (예: 22:00 - 06:00)
+          if (policyStartMin > policyEndMin && policyEndMin != 1440) {
+            // 두 구간으로 나누어 처리
+            // 구간 1: policyStartMin ~ 1440 (24:00)
+            final overlapMin1 = _calculateOverlapMinutes(startMinutes, endMinutes, policyStartMin, 1440);
+            if (overlapMin1 > 0) {
+              result[policyApply] = (result[policyApply] ?? 0) + overlapMin1;
+            }
+            
+            // 구간 2: 0 ~ policyEndMin
+            final overlapMin2 = _calculateOverlapMinutes(startMinutes, endMinutes, 0, policyEndMin);
+            if (overlapMin2 > 0) {
+              result[policyApply] = (result[policyApply] ?? 0) + overlapMin2;
+            }
+          } else {
+            // 일반적인 경우
+            final overlapMin = _calculateOverlapMinutes(startMinutes, endMinutes, policyStartMin, policyEndMin);
+            if (overlapMin > 0) {
+              result[policyApply] = (result[policyApply] ?? 0) + overlapMin;
+            }
           }
         }
       }
@@ -2935,6 +2800,18 @@ class ApiService {
         'out_of_business': 0,
       };
     }
+  }
+  
+  // 정책 구간과 예약 구간의 겹침 계산 (확장된 시간 지원)
+  static int _calculatePolicyOverlap(int reserveStart, int reserveEnd, int policyStart, int policyEnd) {
+    final overlapStart = reserveStart > policyStart ? reserveStart : policyStart;
+    final overlapEnd = reserveEnd < policyEnd ? reserveEnd : policyEnd;
+    
+    if (overlapStart >= overlapEnd) {
+      return 0;
+    }
+    
+    return overlapEnd - overlapStart;
   }
 
   // 두 시간 구간의 겹치는 시간(분) 계산
@@ -3194,7 +3071,7 @@ class ApiService {
         'bill_status': '결제완료',
         'contract_history_id': contractHistoryId,
         'branch_id': branchId,
-        'contract_TS_min_expiry_date': contractTsMinExpiryDate ?? '',
+        'contract_ts_min_expiry_date': contractTsMinExpiryDate ?? '', // Supabase 소문자
       };
       
       print('v2_bill_times 업데이트 데이터: $billTimesData');

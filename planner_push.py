@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-골프 플래너 앱 - 로컬 변경사항 GitHub에 업로드
-
-사용법:
-  python planner_push.py                  # 대화형 (커밋 메시지 입력)
-  python planner_push.py "커밋 메시지"   # 커밋 메시지 직접 지정
+골프 플래너 앱 - GitHub에 업로드
+myxplanner/ 폴더만 v2_myxplanner 리포지토리로 push
 """
-
 import subprocess
 import sys
 from pathlib import Path
+
+# 설정
+REMOTE_NAME = 'planner-origin'
+REMOTE_URL = 'https://github.com/seojongik/v2_myxplanner.git'
+FOLDER_PREFIX = 'myxplanner'
+BRANCH = 'main'
 
 # 색상 코드
 class Colors:
@@ -26,84 +28,73 @@ def print_step(message):
 def print_success(message):
     print(f"{Colors.GREEN}✓ {message}{Colors.RESET}")
 
-def print_warning(message):
-    print(f"{Colors.YELLOW}⚠ {message}{Colors.RESET}")
-
 def print_error(message):
     print(f"{Colors.RED}✗ {message}{Colors.RESET}")
+
+def print_warning(message):
+    print(f"{Colors.YELLOW}⚠ {message}{Colors.RESET}")
 
 def run_command(cmd, cwd=None, check=True):
     try:
         result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            check=check,
-            capture_output=True,
-            text=True
+            cmd, cwd=cwd, check=check,
+            capture_output=True, text=True
         )
         return result.stdout.strip(), result.returncode
     except subprocess.CalledProcessError as e:
         if check:
             print_error(f"명령 실행 실패: {' '.join(cmd)}")
-            if e.stderr:
-                print_error(f"에러 출력: {e.stderr}")
-            if e.stdout:
-                print_error(f"표준 출력: {e.stdout}")
-            # stderr가 비어있을 경우 stdout을 확인
-            if not e.stderr and e.stdout:
-                print_error(f"에러: {e.stdout}")
+            print_error(f"에러: {e.stderr}")
             raise
-        return e.stderr.strip() if e.stderr else e.stdout.strip(), e.returncode
+        return e.stderr.strip(), e.returncode
+
+def ensure_remote(project_root):
+    """remote가 없으면 추가"""
+    remotes, _ = run_command(['git', 'remote'], cwd=project_root, check=False)
+    if REMOTE_NAME not in remotes.split('\n'):
+        print_step(f"Remote '{REMOTE_NAME}' 추가 중...")
+        run_command(['git', 'remote', 'add', REMOTE_NAME, REMOTE_URL], cwd=project_root)
+        print_success(f"Remote 추가 완료: {REMOTE_URL}")
+    return True
 
 def main():
-    project_path = Path(__file__).parent
+    project_root = Path(__file__).parent.parent
 
-    print(f"{Colors.BOLD}골프 플래너 앱 - 로컬 변경사항 GitHub에 업로드{Colors.RESET}")
-    print(f"경로: {project_path}")
+    print(f"{Colors.BOLD}골프 플래너 앱 - v2_myxplanner 리포지토리로 Push{Colors.RESET}")
+    print(f"대상 폴더: {FOLDER_PREFIX}/")
+    print(f"대상 리포: {REMOTE_URL}")
     print()
 
-    # 1. 변경사항 확인
-    print_step("변경사항 확인")
-    status_output, _ = run_command(['git', 'status', '--porcelain'],
-                                  cwd=project_path, check=False)
+    # 1. myxplanner/ 폴더의 변경사항 확인
+    print_step("플래너 변경사항 확인")
+    status_output, _ = run_command(
+        ['git', 'status', '--porcelain', f'{FOLDER_PREFIX}/'],
+        cwd=project_root, check=False
+    )
 
     if not status_output:
-        print_warning("변경사항이 없습니다.")
+        print_warning(f"{FOLDER_PREFIX}/ 폴더에 변경사항이 없습니다.")
 
-        # 커밋은 있지만 push 안된 것 확인
-        current_branch, _ = run_command(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-                                       cwd=project_path)
-        ahead_behind, _ = run_command(
-            ['git', 'rev-list', '--left-right', '--count', f'origin/{current_branch}...HEAD'],
-            cwd=project_path, check=False
-        )
-
-        if ahead_behind:
-            behind, ahead = ahead_behind.split()
-            if int(ahead) > 0:
-                print_warning(f"Push되지 않은 커밋이 {ahead}개 있습니다.")
-                response = input(f"{Colors.YELLOW}Push하시겠습니까? (y/N): {Colors.RESET}").lower()
-                if response == 'y':
-                    print_step(f"Push 중 (origin/{current_branch})")
-                    run_command(['git', 'push', 'origin', current_branch], cwd=project_path)
-                    print_success("Push 완료!")
-                    sys.exit(0)
-
-        print("할 일이 없습니다.")
+        # 이미 커밋된 것이 있는지 확인하고 subtree push만 할지 물어봄
+        response = input(f"{Colors.YELLOW}기존 커밋을 subtree push 하시겠습니까? (y/N): {Colors.RESET}").lower()
+        if response == 'y':
+            ensure_remote(project_root)
+            print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
+            try:
+                run_command(
+                    ['git', 'subtree', 'push', '--prefix', FOLDER_PREFIX, REMOTE_NAME, BRANCH],
+                    cwd=project_root
+                )
+                print_success("Subtree push 완료!")
+            except:
+                print_error("Subtree push 실패. 먼저 모노레포에 커밋이 필요할 수 있습니다.")
         sys.exit(0)
 
     print_success("변경사항 발견:")
     print(status_output)
     print()
 
-    # 2. 변경된 파일 목록 보기
-    print_step("변경된 파일 목록")
-    diff_output, _ = run_command(['git', 'diff', '--stat'], cwd=project_path, check=False)
-    if diff_output:
-        print(diff_output)
-    print()
-
-    # 3. 커밋 메시지 입력
+    # 2. 커밋 메시지
     commit_message = None
     if len(sys.argv) > 1:
         commit_message = sys.argv[1]
@@ -115,38 +106,37 @@ def main():
         print_error("커밋 메시지가 비어있습니다.")
         sys.exit(1)
 
-    # 4. Add all
-    print_step("변경사항 스테이징")
-    run_command(['git', 'add', '.'], cwd=project_path)
-    
-    # 스테이징된 파일 확인
-    staged_files, _ = run_command(['git', 'diff', '--cached', '--name-only'], 
-                                  cwd=project_path, check=False)
-    if not staged_files:
-        print_warning("스테이징된 파일이 없습니다. 변경사항이 모두 무시되었거나 이미 커밋되었을 수 있습니다.")
-        sys.exit(0)
-    
-    print_success("스테이징 완료")
+    # 3. myxplanner/ 폴더만 스테이징
+    print_step("플래너 스테이징")
+    run_command(['git', 'add', f'{FOLDER_PREFIX}/'], cwd=project_root)
+    print_success(f"스테이징 완료 ({FOLDER_PREFIX}/ 폴더만)")
     print()
 
-    # 5. Commit
-    print_step("커밋 생성")
-    run_command(['git', 'commit', '-m', commit_message], cwd=project_path)
-    print_success(f"커밋 완료: {commit_message}")
+    # 4. 모노레포에 커밋
+    print_step("모노레포 커밋 생성")
+    run_command(
+        ['git', 'commit', '-m', f"[Planner] {commit_message}"],
+        cwd=project_root
+    )
+    print_success(f"커밋 완료: [Planner] {commit_message}")
     print()
 
-    # 6. Push
-    current_branch, _ = run_command(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-                                   cwd=project_path)
-    print_step(f"Push 중 (origin/{current_branch})")
+    # 5. Remote 확인/추가
+    ensure_remote(project_root)
 
-    response = input(f"{Colors.YELLOW}GitHub에 Push하시겠습니까? (y/N): {Colors.RESET}").lower()
+    # 6. Subtree push
+    response = input(f"{Colors.YELLOW}v2_myxplanner 리포지토리에 Push하시겠습니까? (y/N): {Colors.RESET}").lower()
     if response != 'y':
-        print_warning("Push를 취소했습니다. 커밋은 로컬에 저장되었습니다.")
+        print_warning("Push를 취소했습니다. 커밋은 모노레포에 저장되었습니다.")
         sys.exit(0)
 
-    run_command(['git', 'push', 'origin', current_branch], cwd=project_path)
+    print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
+    run_command(
+        ['git', 'subtree', 'push', '--prefix', FOLDER_PREFIX, REMOTE_NAME, BRANCH],
+        cwd=project_root
+    )
     print_success("Push 완료!")
+    print(f"{Colors.GREEN}✓ {REMOTE_URL} 에 {FOLDER_PREFIX}/ 폴더가 push 되었습니다.{Colors.RESET}")
 
 if __name__ == '__main__':
     main()

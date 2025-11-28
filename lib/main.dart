@@ -20,6 +20,7 @@ import 'crm_member_redirect_page.dart';
 import 'utils/debug_logger.dart';
 import 'stubs/html_stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'services/fcm_service.dart';
+import 'services/supabase_adapter.dart';
 
 void main() async {
   // 강제로 로그 출력 (예외 발생 전에도 보이도록)
@@ -210,6 +211,22 @@ void main() async {
     } else {
       print('⚠️ [STEP 4] Firebase 앱이 없습니다!');
       debugPrint('⚠️ [STEP 4] Firebase 앱이 없습니다!');
+    }
+    
+    // Supabase 초기화 (useSupabase = true 인 경우)
+    if (ApiService.useSupabase) {
+      print('🚀 [STEP 4.5] Supabase 초기화 시작');
+      debugPrint('🚀 [STEP 4.5] Supabase 초기화 시작');
+      try {
+        await SupabaseAdapter.initialize();
+        print('✅ [STEP 4.5] Supabase 초기화 완료');
+        debugPrint('✅ [STEP 4.5] Supabase 초기화 완료');
+      } catch (e) {
+        print('❌ [STEP 4.5] Supabase 초기화 실패: $e');
+        debugPrint('❌ [STEP 4.5] Supabase 초기화 실패: $e');
+        print('⚠️ [STEP 4.5] PHP API로 폴백합니다');
+        debugPrint('⚠️ [STEP 4.5] PHP API로 폴백합니다');
+      }
     }
     
     // API 서비스 초기화

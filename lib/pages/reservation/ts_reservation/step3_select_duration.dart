@@ -7,6 +7,7 @@ class Step3SelectDuration extends StatefulWidget {
   final String? branchId;
   final DateTime? selectedDate;
   final String? selectedTime;
+  final Map<String, dynamic>? scheduleInfo; // 영업시간 정보
   final Function(int)? onDurationSelected;
 
   const Step3SelectDuration({
@@ -16,6 +17,7 @@ class Step3SelectDuration extends StatefulWidget {
     this.branchId,
     this.selectedDate,
     this.selectedTime,
+    this.scheduleInfo,
     this.onDurationSelected,
   }) : super(key: key);
 
@@ -65,8 +67,26 @@ class _Step3SelectDurationState extends State<Step3SelectDuration> {
         _maxDuration = maximums.reduce((a, b) => a > b ? a : b);
         _selectedDuration = bases.reduce((a, b) => a + b) / bases.length; // 평균값
         
+        // 영업 종료 시간까지만 선택 가능하도록 최대값 제한
+        final maxAllowedMinutes = _calculateMaxAllowedMinutes();
+        if (maxAllowedMinutes > 0 && maxAllowedMinutes < _maxDuration) {
+          print('🕐 영업시간 제한 적용: 최대 ${maxAllowedMinutes}분 (원래 ${_maxDuration}분)');
+          _maxDuration = maxAllowedMinutes;
+        }
+        
+        // 선택 시간이 최대값을 초과하면 조정
+        if (_selectedDuration > _maxDuration) {
+          _selectedDuration = _maxDuration;
+        }
+        
         // 5분 단위로 조정
         _selectedDuration = (_selectedDuration / 5).round() * 5.0;
+        _maxDuration = (_maxDuration / 5).floor() * 5.0; // 최대값도 5분 단위로 내림
+        
+        // 최소값이 최대값보다 크면 조정
+        if (_minDuration > _maxDuration) {
+          _minDuration = _maxDuration;
+        }
         
         print('=== 계산된 슬라이더 값 ===');
         print('최소값: ${_minDuration}분');
@@ -90,6 +110,46 @@ class _Step3SelectDurationState extends State<Step3SelectDuration> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+  
+  // 영업 종료 시간까지 남은 분 계산
+  double _calculateMaxAllowedMinutes() {
+    if (widget.selectedTime == null || widget.scheduleInfo == null) {
+      return 0;
+    }
+    
+    try {
+      // 선택된 시작 시간 파싱
+      final startParts = widget.selectedTime!.split(':');
+      final startHour = int.parse(startParts[0]);
+      final startMinute = int.parse(startParts[1]);
+      final startMinutes = startHour * 60 + startMinute;
+      
+      // 영업 종료 시간 파싱
+      final businessEnd = widget.scheduleInfo!['business_end']?.toString() ?? '00:00:00';
+      final endParts = businessEnd.split(':');
+      final endHour = int.parse(endParts[0]);
+      final endMinute = int.parse(endParts[1]);
+      int endMinutes = endHour * 60 + endMinute;
+      
+      // 자정(00:00)인 경우 1440분(24시간)으로 처리
+      if (endMinutes == 0) {
+        endMinutes = 1440;
+      }
+      
+      // 종료 시간이 시작 시간보다 작으면 다음 날로 계산
+      if (endMinutes <= startMinutes) {
+        endMinutes += 1440;
+      }
+      
+      final maxMinutes = (endMinutes - startMinutes).toDouble();
+      print('🕐 영업시간 계산: 시작=${startMinutes}분, 종료=${endMinutes}분, 최대=${maxMinutes}분');
+      
+      return maxMinutes;
+    } catch (e) {
+      print('영업시간 계산 오류: $e');
+      return 0;
     }
   }
 

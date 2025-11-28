@@ -160,8 +160,8 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
     // 지점 정보 로드
     await _loadBranchInfo();
 
-    // 레슨권이 있으면 프로 목록 로드
-    final contractLS = _safeParseInt(widget.contract['contract_LS_min']);
+    // 레슨권이 있으면 프로 목록 로드 (Supabase는 소문자로 반환)
+    final contractLS = _safeParseInt(widget.contract['contract_ls_min'] ?? widget.contract['contract_LS_min']);
     if (contractLS > 0) {
       await _loadAvailablePros();
     }
@@ -852,14 +852,14 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         'contract_history_status': '활성',
         'price': contract['price'] ?? 0,
         'contract_credit': contract['contract_credit'] ?? 0,
-        'contract_LS_min': contract['contract_LS_min'] ?? 0,
+        'contract_ls_min': contract['contract_ls_min'] ?? contract['contract_LS_min'] ?? 0,
         'contract_games': contract['contract_games'] ?? 0,
-        'contract_TS_min': contract['contract_TS_min'] ?? 0,
+        'contract_ts_min': contract['contract_ts_min'] ?? contract['contract_TS_min'] ?? 0,
         'contract_term_month': contract['contract_term_month'] ?? 0,
         'contract_credit_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_credit_effect_month']),
-        'contract_LS_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_LS_min_effect_month']),
+        'contract_ls_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month']),
         'contract_games_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_games_effect_month']),
-        'contract_TS_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_TS_min_effect_month']),
+        'contract_ts_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ts_min_effect_month'] ?? contract['contract_TS_min_effect_month']),
         'contract_term_month_expiry_date': termEndDate != null ? DateFormat('yyyy-MM-dd').format(termEndDate!) : null,
         'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
         'pro_name': selectedProName,
@@ -961,12 +961,12 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         }
       }
 
-      // 5. 레슨권 처리 (v3_LS_countings만)
-      final contractLS = _safeParseInt(contract['contract_LS_min']);
+      // 5. 레슨권 처리 (v3_LS_countings만) - Supabase는 소문자로 반환
+      final contractLS = _safeParseInt(contract['contract_ls_min'] ?? contract['contract_LS_min']);
       if (contractLS > 0) {
         debugPrint('레슨권 등록 중: $contractLS분');
 
-        final effectMonth = _safeParseInt(contract['contract_LS_min_effect_month'], defaultValue: 12);
+        final effectMonth = _safeParseInt(contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month'], defaultValue: 12);
         final contractEndDate = DateTime(
           DateTime.now().year,
           DateTime.now().month + effectMonth,
@@ -1004,8 +1004,8 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         debugPrint('레슨권 카운팅 완료');
       }
 
-      // 5. 타석시간 처리 (v2_bill_times)
-      final contractTS = _safeParseInt(contract['contract_TS_min']);
+      // 5. 타석시간 처리 (v2_bill_times) - Supabase는 소문자로 반환
+      final contractTS = _safeParseInt(contract['contract_ts_min'] ?? contract['contract_TS_min']);
       if (contractTS > 0) {
         debugPrint('타석시간 등록 중: $contractTS분');
 
@@ -1023,7 +1023,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'contract_history_id': contractHistoryId,
           'routine_id': null,
           'branch_id': branchId,
-          'contract_TS_min_expiry_date': contractHistoryData['contract_TS_min_expiry_date'],
+          'contract_ts_min_expiry_date': contractHistoryData['contract_ts_min_expiry_date'],
         };
 
         await ApiService.addData(
@@ -1210,14 +1210,14 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         'contract_history_status': '활성',
         'price': contract['price'] ?? 0,
         'contract_credit': contract['contract_credit'] ?? 0,
-        'contract_LS_min': contract['contract_LS_min'] ?? 0,
+        'contract_ls_min': contract['contract_ls_min'] ?? contract['contract_LS_min'] ?? 0,
         'contract_games': contract['contract_games'] ?? 0,
-        'contract_TS_min': contract['contract_TS_min'] ?? 0,
+        'contract_ts_min': contract['contract_ts_min'] ?? contract['contract_TS_min'] ?? 0,
         'contract_term_month': contract['contract_term_month'] ?? 0,
         'contract_credit_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_credit_effect_month']),
-        'contract_LS_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_LS_min_effect_month']),
+        'contract_ls_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month']),
         'contract_games_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_games_effect_month']),
-        'contract_TS_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_TS_min_effect_month']),
+        'contract_ts_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ts_min_effect_month'] ?? contract['contract_TS_min_effect_month']),
         'contract_term_month_expiry_date': termEndDate != null ? DateFormat('yyyy-MM-dd').format(termEndDate!) : null,
         'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
         'pro_name': selectedProName,
@@ -1276,12 +1276,12 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         }
       }
 
-      // 3. 레슨권 처리 (v3_LS_countings만)
-      final contractLS = _safeParseInt(contract['contract_LS_min']);
+      // 3. 레슨권 처리 (v3_LS_countings만) - Supabase는 소문자로 반환
+      final contractLS = _safeParseInt(contract['contract_ls_min'] ?? contract['contract_LS_min']);
       if (contractLS > 0) {
         print('레슨권 등록 중: $contractLS분');
 
-        final effectMonth = _safeParseInt(contract['contract_LS_min_effect_month'], defaultValue: 12);
+        final effectMonth = _safeParseInt(contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month'], defaultValue: 12);
         final contractEndDate = DateTime(
           DateTime.now().year,
           DateTime.now().month + effectMonth,
@@ -1319,8 +1319,8 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         print('레슨권 카운팅 완료');
       }
 
-      // 4. 타석시간 처리 (v2_bill_times)
-      final contractTS = _safeParseInt(contract['contract_TS_min']);
+      // 4. 타석시간 처리 (v2_bill_times) - Supabase는 소문자로 반환
+      final contractTS = _safeParseInt(contract['contract_ts_min'] ?? contract['contract_TS_min']);
       if (contractTS > 0) {
         print('타석시간 등록 중: $contractTS분');
 
@@ -1615,9 +1615,9 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
     return '${formatter.format(priceInt)}원';
   }
 
-  // 설정 완료 여부 확인
+  // 설정 완료 여부 확인 - Supabase는 소문자로 반환
   bool _isSetupComplete() {
-    final contractLS = _safeParseInt(widget.contract['contract_LS_min']);
+    final contractLS = _safeParseInt(widget.contract['contract_ls_min'] ?? widget.contract['contract_LS_min']);
     final contractTermMonth = _safeParseInt(widget.contract['contract_term_month']);
 
     // 레슨권이 있으면 프로 선택 필수
@@ -1681,10 +1681,10 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
     final contractName = contract['contract_name'] ?? '';
     final price = contract['price'] ?? 0;
 
-    // 서비스 정보
+    // 서비스 정보 (Supabase는 소문자로 반환)
     final contractCredit = _safeParseInt(contract['contract_credit']);
-    final contractLSMin = _safeParseInt(contract['contract_LS_min']);
-    final contractTSMin = _safeParseInt(contract['contract_TS_min']);
+    final contractLSMin = _safeParseInt(contract['contract_ls_min'] ?? contract['contract_LS_min']);
+    final contractTSMin = _safeParseInt(contract['contract_ts_min'] ?? contract['contract_TS_min']);
     final contractGames = _safeParseInt(contract['contract_games']);
     final contractTermMonth = _safeParseInt(contract['contract_term_month']);
 

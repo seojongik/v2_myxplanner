@@ -48,6 +48,9 @@ dependencies:
   
   # 알림 (진동은 HapticFeedback 사용)
   flutter_local_notifications: ^17.2.3
+  
+  # Supabase (DB 마이그레이션)
+  supabase_flutter: ^2.8.0
 
 dev_dependencies:
   flutter_test:

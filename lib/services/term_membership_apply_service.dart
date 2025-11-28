@@ -1,17 +1,8 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'holiday_service.dart';
+import 'api_service.dart';
 
 /// 기간권 사용 가능 분수 계산을 전담하는 서비스 클래스
 class TermMembershipApplyService {
-  // 서버 루트의 dynamic_api.php 사용
-  static const String baseUrl = 'https://autofms.mycafe24.com/dynamic_api.php';
-
-  // 기본 헤더
-  static const Map<String, String> headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
 
   /// 기간권 사용 가능 분수 계산 (메인 함수)
   /// 
@@ -152,41 +143,25 @@ class TermMembershipApplyService {
       print('지점 ID: $branchId, 회원 ID: $memberId, 날짜: $date');
       
       // v2_bill_term에서 해당 날짜의 기간권 사용 시간 조회
-      final requestData = {
-        'operation': 'get',
-        'table': 'v2_bill_term',
-        'fields': ['bill_term_min'],
-        'where': [
+      final result = await ApiService.getData(
+        table: 'v2_bill_term',
+        fields: ['bill_term_min'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
           {'field': 'bill_date', 'operator': '=', 'value': date},
           {'field': 'bill_status', 'operator': '=', 'value': '결제완료'},
         ],
-      };
+      );
       
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(requestData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['success'] == true) {
-          final result = List<Map<String, dynamic>>.from(responseData['data']);
-          
-          int totalUsedMinutes = 0;
-          for (final record in result) {
-            final usedMinutes = int.tryParse(record['bill_term_min']?.toString() ?? '0') ?? 0;
-            totalUsedMinutes += usedMinutes;
-          }
-          
-          print('기존 기간권 사용 총합: ${totalUsedMinutes}분');
-          return totalUsedMinutes;
-        }
+      int totalUsedMinutes = 0;
+      for (final record in result) {
+        final usedMinutes = int.tryParse(record['bill_term_min']?.toString() ?? '0') ?? 0;
+        totalUsedMinutes += usedMinutes;
       }
       
-      return 0;
+      print('기존 기간권 사용 총합: ${totalUsedMinutes}분');
+      return totalUsedMinutes;
     } catch (e) {
       print('기존 기간권 사용 확인 실패: $e');
       return 0;
@@ -209,38 +184,19 @@ class TermMembershipApplyService {
       final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       
       // 1. v2_bill_term에서 유효한 기간권 조회
-      final billTermData = {
-        'operation': 'get',
-        'table': 'v2_bill_term',
-        'fields': ['bill_term_id', 'contract_history_id', 'contract_term_month_expiry_date', 'bill_text'],
-        'where': [
+      final billTerms = await ApiService.getData(
+        table: 'v2_bill_term',
+        fields: ['bill_term_id', 'contract_history_id', 'contract_term_month_expiry_date', 'bill_text'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
           {'field': 'contract_term_month_expiry_date', 'operator': '>=', 'value': todayStr},
         ],
-        'orderBy': [
+        orderBy: [
           {'field': 'bill_term_id', 'direction': 'DESC'}
         ],
-      };
+      );
       
-      final billTermResponse = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(billTermData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (billTermResponse.statusCode != 200) {
-        print('v2_bill_term 조회 실패');
-        return [];
-      }
-      
-      final billTermResult = json.decode(billTermResponse.body);
-      if (billTermResult['success'] != true) {
-        print('v2_bill_term 조회 API 오류');
-        return [];
-      }
-      
-      final billTerms = List<Map<String, dynamic>>.from(billTermResult['data']);
       print('조회된 v2_bill_term 레코드 수: ${billTerms.length}');
       
       if (billTerms.isEmpty) {
@@ -290,34 +246,14 @@ class TermMembershipApplyService {
       }
       
       // 3. contract_history_id로 v3_contract_history 조회하여 contract_id 획득
-      final contractHistoryData = {
-        'operation': 'get',
-        'table': 'v3_contract_history',
-        'fields': ['contract_history_id', 'contract_id'],
-        'where': [
+      final contractHistories = await ApiService.getData(
+        table: 'v3_contract_history',
+        fields: ['contract_history_id', 'contract_id'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'contract_history_id', 'operator': 'IN', 'value': validContractHistoryIds.toList()},
         ],
-      };
-      
-      final contractHistoryResponse = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(contractHistoryData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (contractHistoryResponse.statusCode != 200) {
-        print('contract_history 조회 실패');
-        return [];
-      }
-      
-      final contractHistoryResult = json.decode(contractHistoryResponse.body);
-      if (contractHistoryResult['success'] != true) {
-        print('contract_history 조회 API 오류');
-        return [];
-      }
-      
-      final contractHistories = List<Map<String, dynamic>>.from(contractHistoryResult['data']);
+      );
       
       if (contractHistories.isEmpty) {
         print('contract_history 정보를 찾을 수 없음');
@@ -339,36 +275,14 @@ class TermMembershipApplyService {
       }
       
       // 5. v2_contracts에서 이용 조건 조회
-      final contractIdsToQuery = contractIds;
-      
-      final contractDetailsData = {
-        'operation': 'get',
-        'table': 'v2_contracts',
-        'fields': ['contract_id', 'contract_name', 'available_days', 'available_start_time', 'available_end_time', 'available_ts_id', 'program_reservation_availability'],
-        'where': [
+      final contractDetails = await ApiService.getData(
+        table: 'v2_contracts',
+        fields: ['contract_id', 'contract_name', 'available_days', 'available_start_time', 'available_end_time', 'available_ts_id', 'program_reservation_availability'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'contract_id', 'operator': 'IN', 'value': contractIds},
         ],
-      };
-      
-      final contractDetailsResponse = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(contractDetailsData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (contractDetailsResponse.statusCode != 200) {
-        print('계약 상세 조회 실패');
-        return [];
-      }
-      
-      final contractDetailsResult = json.decode(contractDetailsResponse.body);
-      if (contractDetailsResult['success'] != true) {
-        print('계약 상세 조회 API 오류');
-        return [];
-      }
-      
-      final contractDetails = List<Map<String, dynamic>>.from(contractDetailsResult['data']);
+      );
       
       print('=== 조회된 기간권 이용 조건 ===');
       for (final detail in contractDetails) {
@@ -469,36 +383,17 @@ class TermMembershipApplyService {
       print('홀드 체크할 contract_history_id: $contractHistoryIds');
       
       // v2_bill_term_hold에서 해당 예약 날짜에 홀드된 기간권 조회
-      final holdData = {
-        'operation': 'get',
-        'table': 'v2_bill_term_hold',
-        'fields': ['contract_history_id', 'term_hold_start', 'term_hold_end', 'term_hold_reason'],
-        'where': [
+      final holdRecords = await ApiService.getData(
+        table: 'v2_bill_term_hold',
+        fields: ['contract_history_id', 'term_hold_start', 'term_hold_end', 'term_hold_reason'],
+        where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'contract_history_id', 'operator': 'IN', 'value': contractHistoryIds},
           {'field': 'term_hold_start', 'operator': '<=', 'value': reservationDate},
           {'field': 'term_hold_end', 'operator': '>=', 'value': reservationDate},
         ],
-      };
+      );
       
-      final holdResponse = await http.post(
-        Uri.parse(baseUrl),
-        headers: headers,
-        body: json.encode(holdData),
-      ).timeout(Duration(seconds: 15));
-      
-      if (holdResponse.statusCode != 200) {
-        print('홀드 정보 조회 실패');
-        return periodPasses; // 실패 시 원본 반환
-      }
-      
-      final holdResult = json.decode(holdResponse.body);
-      if (holdResult['success'] != true) {
-        print('홀드 정보 조회 API 오류');
-        return periodPasses; // 실패 시 원본 반환
-      }
-      
-      final holdRecords = List<Map<String, dynamic>>.from(holdResult['data']);
       print('조회된 홀드 레코드 수: ${holdRecords.length}');
       
       if (holdRecords.isEmpty) {
@@ -693,4 +588,4 @@ class TermMembershipApplyService {
       return 0;
     }
   }
-} 
+}

@@ -150,6 +150,7 @@ class _Step0StructureState extends State<Step0Structure> with TickerProviderStat
           branchId: widget.branchId,
           selectedDate: _selectedDate,
           selectedTime: _selectedTime,
+          scheduleInfo: _scheduleInfo,
           onDurationSelected: _onDurationSelected,
         ),
       ),
@@ -370,6 +371,7 @@ class _Step0StructureState extends State<Step0Structure> with TickerProviderStat
             branchId: widget.branchId,
             selectedDate: _selectedDate,
             selectedTime: _selectedTime,
+            scheduleInfo: _scheduleInfo,
             onDurationSelected: _onDurationSelected,
           );
           break;
