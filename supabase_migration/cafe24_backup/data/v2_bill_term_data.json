@@ -1,7 +1,7 @@
 {
   "table_name": "v2_bill_term",
   "row_count": 80,
-  "backup_timestamp": "2025-11-28T21:46:32.626687",
+  "backup_timestamp": "2025-11-29T23:45:27.568630",
   "data": [
     {
       "branch_id": "famd",
@@ -14,7 +14,7 @@
       "bill_timestamp": "2025-09-14T18:41:03",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2691,
+      "contract_history_id": 2693,
       "contract_term_month_expiry_date": "2024-04-03",
       "term_startdate": "2024-01-03",
       "term_enddate": "2024-04-02"
@@ -30,7 +30,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "contract_term_month_expiry_date": "2026-01-30",
       "term_startdate": "2024-01-08",
       "term_enddate": "2025-01-07"
@@ -46,7 +46,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2805,
+      "contract_history_id": 2807,
       "contract_term_month_expiry_date": "2025-07-06",
       "term_startdate": "2024-01-25",
       "term_enddate": "2025-01-24"
@@ -62,7 +62,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2804,
+      "contract_history_id": 2806,
       "contract_term_month_expiry_date": "2025-02-01",
       "term_startdate": "2024-01-25",
       "term_enddate": "2025-01-24"
@@ -94,7 +94,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3033,
+      "contract_history_id": 3035,
       "contract_term_month_expiry_date": "2025-04-23",
       "term_startdate": "2024-03-30",
       "term_enddate": "2024-09-29"
@@ -110,7 +110,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2953,
+      "contract_history_id": 2955,
       "contract_term_month_expiry_date": "2025-04-07",
       "term_startdate": "2024-05-07",
       "term_enddate": "2024-08-06"
@@ -126,7 +126,7 @@
       "bill_timestamp": "2025-10-01T17:02:08",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2995,
+      "contract_history_id": 2997,
       "contract_term_month_expiry_date": "2026-01-15",
       "term_startdate": "2024-06-10",
       "term_enddate": "2025-06-09"
@@ -142,7 +142,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2889,
+      "contract_history_id": 2891,
       "contract_term_month_expiry_date": "2025-09-14",
       "term_startdate": "2024-06-12",
       "term_enddate": "2024-09-11"
@@ -158,7 +158,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3009,
+      "contract_history_id": 3011,
       "contract_term_month_expiry_date": "2025-05-09",
       "term_startdate": "2024-08-24",
       "term_enddate": "2024-11-23"
@@ -174,7 +174,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2691,
+      "contract_history_id": 2693,
       "contract_term_month_expiry_date": "2025-10-03",
       "term_startdate": "2024-08-26",
       "term_enddate": "2025-08-25"
@@ -190,7 +190,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3207,
+      "contract_history_id": 3209,
       "contract_term_month_expiry_date": "2025-06-13",
       "term_startdate": "2024-09-02",
       "term_enddate": "2025-03-01"
@@ -206,7 +206,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3122,
+      "contract_history_id": 3124,
       "contract_term_month_expiry_date": "2026-01-30",
       "term_startdate": "2024-10-03",
       "term_enddate": "2025-10-02"
@@ -222,7 +222,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3033,
+      "contract_history_id": 3035,
       "contract_term_month_expiry_date": "2025-05-09",
       "term_startdate": "2024-10-22",
       "term_enddate": "2025-04-21"
@@ -254,7 +254,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3274,
+      "contract_history_id": 3276,
       "contract_term_month_expiry_date": "2025-12-25",
       "term_startdate": "2024-12-25",
       "term_enddate": "2025-12-24"
@@ -270,7 +270,7 @@
       "bill_timestamp": "2025-10-20T10:41:20",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "contract_term_month_expiry_date": "2026-05-23",
       "term_startdate": "2025-01-18",
       "term_enddate": "2026-01-17"
@@ -286,7 +286,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3270,
+      "contract_history_id": 3272,
       "contract_term_month_expiry_date": "2025-07-19",
       "term_startdate": "2025-01-20",
       "term_enddate": "2025-07-19"
@@ -318,7 +318,7 @@
       "bill_timestamp": "2025-10-19T19:13:49",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3218,
+      "contract_history_id": 3220,
       "contract_term_month_expiry_date": "2026-05-02",
       "term_startdate": "2025-02-02",
       "term_enddate": "2026-02-01"
@@ -334,7 +334,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3293,
+      "contract_history_id": 3295,
       "contract_term_month_expiry_date": "2025-05-13",
       "term_startdate": "2025-02-12",
       "term_enddate": "2025-05-11"
@@ -350,7 +350,7 @@
       "bill_timestamp": "2025-06-14T19:35:04",
       "reservation_id": null,
       "bill_status": "결제완료",
-      "contract_history_id": 3315,
+      "contract_history_id": 3317,
       "contract_term_month_expiry_date": "2025-05-12",
       "term_startdate": "2025-02-12",
       "term_enddate": "2025-05-11"

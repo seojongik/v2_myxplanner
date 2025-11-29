@@ -219,7 +219,7 @@
       "Seq_in_index": 1,
       "Column_name": "LS_id",
       "Collation": "A",
-      "Cardinality": 14240,
+      "Cardinality": 14422,
       "Sub_part": null,
       "Packed": null,
       "Null": "YES",
@@ -227,5 +227,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:31.891669"
+  "backup_timestamp": "2025-11-29T23:45:26.820080"
 }

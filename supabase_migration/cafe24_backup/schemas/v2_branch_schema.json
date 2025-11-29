@@ -116,5 +116,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_branch` (\n  `branch_id` varchar(20) DEFAULT NULL,\n  `branch_password` varchar(100) DEFAULT NULL,\n  `branch_name` varchar(30) DEFAULT NULL,\n  `branch_status` varchar(20) DEFAULT NULL,\n  `branch_address` varchar(100) DEFAULT NULL,\n  `branch_business_reg_no` varchar(30) DEFAULT NULL,\n  `branch_phone` varchar(30) DEFAULT NULL,\n  `branch_manager_id` int(11) DEFAULT NULL,\n  `branch_director_name` varchar(30) DEFAULT NULL,\n  `branch_director_phone` varchar(30) DEFAULT NULL,\n  `tax_type` varchar(100) DEFAULT NULL,\n  `branch_director_birthday` date DEFAULT NULL,\n  `portone_api_secret` varchar(100) DEFAULT NULL,\n  `online_sales_term_type` varchar(20) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:33.877157"
+  "backup_timestamp": "2025-11-29T23:45:28.894849"
 }

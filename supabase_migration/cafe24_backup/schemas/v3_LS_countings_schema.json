@@ -179,7 +179,7 @@
       "Seq_in_index": 1,
       "Column_name": "LS_counting_id",
       "Collation": "A",
-      "Cardinality": 1088,
+      "Cardinality": 1107,
       "Sub_part": null,
       "Packed": null,
       "Null": "",
@@ -187,5 +187,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:35.822259"
+  "backup_timestamp": "2025-11-29T23:45:30.843516"
 }

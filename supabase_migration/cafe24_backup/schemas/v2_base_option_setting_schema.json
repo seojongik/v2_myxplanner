@@ -60,5 +60,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_base_option_setting` (\n  `branch_id` varchar(20) DEFAULT NULL,\n  `category` varchar(30) DEFAULT NULL,\n  `table_name` varchar(30) DEFAULT NULL,\n  `field_name` varchar(50) DEFAULT NULL,\n  `option_value` varchar(100) DEFAULT NULL,\n  `setting_status` varchar(20) DEFAULT NULL,\n  `option_sequence` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:32.518991"
+  "backup_timestamp": "2025-11-29T23:45:27.466583"
 }

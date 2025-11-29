@@ -1,7 +1,7 @@
 {
   "table_name": "v2_discount_coupon",
   "row_count": 22,
-  "backup_timestamp": "2025-11-28T21:46:33.998628",
+  "backup_timestamp": "2025-11-29T23:45:28.997268",
   "data": [
     {
       "branch_id": "test",

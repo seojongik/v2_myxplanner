@@ -1,7 +1,7 @@
 {
   "table_name": "v2_ts_pricing_policy",
   "row_count": 89,
-  "backup_timestamp": "2025-11-28T21:46:35.675457",
+  "backup_timestamp": "2025-11-29T23:45:30.698629",
   "data": [
     {
       "branch_id": "test",

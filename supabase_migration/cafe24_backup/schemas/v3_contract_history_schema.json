@@ -227,7 +227,7 @@
       "Seq_in_index": 1,
       "Column_name": "contract_history_id",
       "Collation": "A",
-      "Cardinality": 4318,
+      "Cardinality": 4551,
       "Sub_part": null,
       "Packed": null,
       "Null": "",
@@ -241,7 +241,7 @@
       "Seq_in_index": 1,
       "Column_name": "contract_id",
       "Collation": "A",
-      "Cardinality": 143,
+      "Cardinality": 111,
       "Sub_part": null,
       "Packed": null,
       "Null": "YES",
@@ -255,7 +255,7 @@
       "Seq_in_index": 1,
       "Column_name": "member_id",
       "Collation": "A",
-      "Cardinality": 2159,
+      "Cardinality": 2275,
       "Sub_part": null,
       "Packed": null,
       "Null": "YES",
@@ -263,5 +263,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:35.880596"
+  "backup_timestamp": "2025-11-29T23:45:30.909970"
 }

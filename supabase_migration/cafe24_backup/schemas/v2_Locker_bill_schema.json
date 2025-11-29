@@ -186,7 +186,7 @@
       "Extra": ""
     }
   ],
-  "create_statement": "CREATE TABLE `v2_Locker_bill` (\n  `locker_bill_id` int(11) NOT NULL AUTO_INCREMENT,\n  `locker_bill_type` varchar(100) DEFAULT NULL,\n  `locker_id` int(11) DEFAULT NULL,\n  `locker_name` varchar(20) DEFAULT NULL,\n  `locker_bill_date` varchar(15) DEFAULT NULL,\n  `member_id` int(11) DEFAULT NULL,\n  `last_month_TS_min` int(11) DEFAULT NULL,\n  `locker_discount_apply_ratio` decimal(10,2) DEFAULT NULL,\n  `locker_bill_total_amt` int(11) DEFAULT NULL,\n  `locker_bill_deduction` int(11) DEFAULT NULL,\n  `locker_bill_netamt` int(11) DEFAULT NULL,\n  `locker_remark` varchar(100) DEFAULT NULL,\n  `locker_bill_remark` varchar(20) DEFAULT NULL,\n  `branch_id` varchar(20) DEFAULT NULL,\n  `locker_bill_start` date DEFAULT NULL,\n  `payment_method` varchar(100) DEFAULT NULL,\n  `locker_bill_end` date DEFAULT NULL,\n  `bill_id` int(11) DEFAULT NULL,\n  `locker_bill_status` varchar(30) DEFAULT NULL,\n  `locker_cancel_date` date DEFAULT NULL,\n  `locker_refund_type` varchar(20) DEFAULT NULL,\n  `locker_refund_amt` int(11) DEFAULT NULL,\n  `bill_text` varchar(50) DEFAULT NULL,\n  PRIMARY KEY (`locker_bill_id`)\n) ENGINE=InnoDB AUTO_INCREMENT=1305 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+  "create_statement": "CREATE TABLE `v2_Locker_bill` (\n  `locker_bill_id` int(11) NOT NULL AUTO_INCREMENT,\n  `locker_bill_type` varchar(100) DEFAULT NULL,\n  `locker_id` int(11) DEFAULT NULL,\n  `locker_name` varchar(20) DEFAULT NULL,\n  `locker_bill_date` varchar(15) DEFAULT NULL,\n  `member_id` int(11) DEFAULT NULL,\n  `last_month_TS_min` int(11) DEFAULT NULL,\n  `locker_discount_apply_ratio` decimal(10,2) DEFAULT NULL,\n  `locker_bill_total_amt` int(11) DEFAULT NULL,\n  `locker_bill_deduction` int(11) DEFAULT NULL,\n  `locker_bill_netamt` int(11) DEFAULT NULL,\n  `locker_remark` varchar(100) DEFAULT NULL,\n  `locker_bill_remark` varchar(20) DEFAULT NULL,\n  `branch_id` varchar(20) DEFAULT NULL,\n  `locker_bill_start` date DEFAULT NULL,\n  `payment_method` varchar(100) DEFAULT NULL,\n  `locker_bill_end` date DEFAULT NULL,\n  `bill_id` int(11) DEFAULT NULL,\n  `locker_bill_status` varchar(30) DEFAULT NULL,\n  `locker_cancel_date` date DEFAULT NULL,\n  `locker_refund_type` varchar(20) DEFAULT NULL,\n  `locker_refund_amt` int(11) DEFAULT NULL,\n  `bill_text` varchar(50) DEFAULT NULL,\n  PRIMARY KEY (`locker_bill_id`)\n) ENGINE=InnoDB AUTO_INCREMENT=1306 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [
     {
       "Table": "v2_Locker_bill",
@@ -195,7 +195,7 @@
       "Seq_in_index": 1,
       "Column_name": "locker_bill_id",
       "Collation": "A",
-      "Cardinality": 1098,
+      "Cardinality": 1324,
       "Sub_part": null,
       "Packed": null,
       "Null": "",
@@ -203,5 +203,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:32.321493"
+  "backup_timestamp": "2025-11-29T23:45:27.284263"
 }

@@ -68,5 +68,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_weekly_schedule_pro` (\n  `branch_id` varchar(20) DEFAULT NULL,\n  `pro_id` int(11) DEFAULT NULL,\n  `pro_name` varchar(10) DEFAULT NULL,\n  `day_of_week` varchar(2) NOT NULL,\n  `is_day_off` varchar(5) NOT NULL,\n  `start_time` time NOT NULL,\n  `end_time` time DEFAULT NULL,\n  `updated_at` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00'\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:35.728557"
+  "backup_timestamp": "2025-11-29T23:45:30.751889"
 }

@@ -1,7 +1,7 @@
 {
   "table_name": "v2_staff_access_setting",
   "row_count": 17,
-  "backup_timestamp": "2025-11-28T21:46:35.533583",
+  "backup_timestamp": "2025-11-29T23:45:30.574992",
   "data": [
     {
       "staff_access_id": "12345",

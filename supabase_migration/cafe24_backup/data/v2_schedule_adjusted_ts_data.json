@@ -1,7 +1,7 @@
 {
   "table_name": "v2_schedule_adjusted_ts",
   "row_count": 945,
-  "backup_timestamp": "2025-11-28T21:46:35.499822",
+  "backup_timestamp": "2025-11-29T23:45:30.539722",
   "data": [
     {
       "branch_id": "test",

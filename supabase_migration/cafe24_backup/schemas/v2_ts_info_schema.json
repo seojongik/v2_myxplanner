@@ -116,5 +116,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_ts_info` (\n  `ts_id` int(11) DEFAULT NULL,\n  `ts_type` varchar(20) DEFAULT NULL,\n  `branch_id` varchar(20) DEFAULT NULL,\n  `ts_description` varchar(100) DEFAULT NULL,\n  `base_price` int(11) DEFAULT NULL,\n  `discount_price` int(11) DEFAULT NULL,\n  `extracharge_price` int(11) DEFAULT NULL,\n  `ts_min_base` int(11) DEFAULT NULL,\n  `ts_min_minimum` int(11) DEFAULT NULL,\n  `ts_min_maximum` int(11) DEFAULT NULL,\n  `ts_status` varchar(20) DEFAULT NULL,\n  `ts_buffer` int(11) DEFAULT NULL,\n  `max_person` int(11) DEFAULT NULL,\n  `member_type_prohibited` varchar(100) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:35.629200"
+  "backup_timestamp": "2025-11-29T23:45:30.660269"
 }

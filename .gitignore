@@ -6,6 +6,9 @@ supabase_migration/supabase_keys.json
 .env.local
 .env.*.local
 
+# 민감한 연결 정보 (선택적 - 필요시 주석 해제)
+# cafe24_connect_info.md
+
 # IDE 설정
 .idea/
 .vscode/
@@ -24,3 +27,4 @@ Thumbs.db
 *.tmp
 *.temp
 
+.env.local.json

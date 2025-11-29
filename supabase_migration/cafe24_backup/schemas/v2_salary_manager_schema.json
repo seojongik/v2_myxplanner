@@ -180,5 +180,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_salary_manager` (\n  `branch_id` varchar(20) DEFAULT NULL,\n  `manager_id` int(11) DEFAULT NULL,\n  `manager_name` varchar(10) DEFAULT NULL,\n  `year` int(11) DEFAULT NULL,\n  `month` varchar(10) DEFAULT NULL,\n  `salary_status` varchar(20) DEFAULT NULL,\n  `contract_type` varchar(20) DEFAULT NULL,\n  `salary_base` int(11) DEFAULT NULL,\n  `salary_hour` int(11) DEFAULT NULL,\n  `severance_pay` int(11) DEFAULT NULL,\n  `salary_total` int(11) DEFAULT NULL,\n  `four_insure` int(11) DEFAULT NULL,\n  `income_tax` int(11) DEFAULT NULL,\n  `business_income_tax` int(11) DEFAULT NULL,\n  `local_tax` int(11) DEFAULT NULL,\n  `other_deduction` int(11) DEFAULT NULL,\n  `deduction_sum` int(11) DEFAULT NULL,\n  `salary_net` int(11) DEFAULT NULL,\n  `updated_at` timestamp NULL DEFAULT NULL,\n  `tax_status` varchar(30) DEFAULT NULL,\n  `tax_office` varchar(50) DEFAULT NULL,\n  `tax_office_mail` varchar(50) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:35.212641"
+  "backup_timestamp": "2025-11-29T23:45:30.249037"
 }

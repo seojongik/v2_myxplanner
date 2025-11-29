@@ -1,7 +1,7 @@
 {
   "table_name": "v2_Locker_bill",
-  "row_count": 1293,
-  "backup_timestamp": "2025-11-28T21:46:32.341116",
+  "row_count": 1294,
+  "backup_timestamp": "2025-11-29T23:45:27.306566",
   "data": [
     {
       "locker_bill_id": 9,
@@ -32327,6 +32327,31 @@
       "locker_refund_type": null,
       "locker_refund_amt": null,
       "bill_text": "락커(47) 2025년 11월 결제분"
+    },
+    {
+      "locker_bill_id": 1305,
+      "locker_bill_type": "신규배정",
+      "locker_id": 113,
+      "locker_name": "113",
+      "locker_bill_date": "2025-11-15",
+      "member_id": 857,
+      "last_month_TS_min": 0,
+      "locker_discount_apply_ratio": "0.50",
+      "locker_bill_total_amt": -2000,
+      "locker_bill_deduction": 1000,
+      "locker_bill_netamt": -1000,
+      "locker_remark": "",
+      "locker_bill_remark": "차감완료",
+      "branch_id": null,
+      "locker_bill_start": "2025-11-15",
+      "payment_method": "크레딧 결제",
+      "locker_bill_end": "2025-11-30",
+      "bill_id": null,
+      "locker_bill_status": null,
+      "locker_cancel_date": null,
+      "locker_refund_type": null,
+      "locker_refund_amt": null,
+      "bill_text": "락커(113) 2025년 11월 결제분"
     }
   ]
 }

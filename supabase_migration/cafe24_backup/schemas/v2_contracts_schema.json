@@ -267,7 +267,7 @@
       "Seq_in_index": 1,
       "Column_name": "contract_id",
       "Collation": "A",
-      "Cardinality": 145,
+      "Cardinality": 221,
       "Sub_part": null,
       "Packed": null,
       "Null": "",
@@ -275,5 +275,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:33.953477"
+  "backup_timestamp": "2025-11-29T23:45:28.951551"
 }

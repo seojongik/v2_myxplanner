@@ -100,5 +100,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_discount_coupon_setting` (\n  `branch_id` varchar(20) DEFAULT NULL,\n  `coupon_code` varchar(30) DEFAULT NULL,\n  `discount_ratio` decimal(10,0) DEFAULT NULL,\n  `coupon_type` varchar(30) DEFAULT NULL,\n  `discount_amt` int(11) DEFAULT NULL,\n  `discount_min` int(11) DEFAULT NULL,\n  `coupon_expiry_days` int(11) DEFAULT NULL,\n  `multiple_coupon_use` varchar(10) DEFAULT NULL,\n  `coupon_description` varchar(50) DEFAULT NULL,\n  `updated_at` timestamp NULL DEFAULT NULL,\n  `setting_status` varchar(10) DEFAULT NULL,\n  `trigger_id` varchar(10) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:34.058837"
+  "backup_timestamp": "2025-11-29T23:45:29.047862"
 }

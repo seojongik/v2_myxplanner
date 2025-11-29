@@ -60,5 +60,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_ts_pricing_policy` (\n  `branch_id` varchar(30) DEFAULT NULL,\n  `policy_category` int(11) DEFAULT NULL,\n  `day_of_week` varchar(10) DEFAULT NULL,\n  `policy_start_time` time DEFAULT NULL,\n  `policy_end_time` time DEFAULT NULL,\n  `policy_apply` varchar(30) DEFAULT NULL,\n  `updated_at` timestamp NULL DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:35.663833"
+  "backup_timestamp": "2025-11-29T23:45:30.688579"
 }

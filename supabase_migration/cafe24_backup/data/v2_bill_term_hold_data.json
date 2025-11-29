@@ -1,7 +1,7 @@
 {
   "table_name": "v2_bill_term_hold",
   "row_count": 53,
-  "backup_timestamp": "2025-11-28T21:46:32.656763",
+  "backup_timestamp": "2025-11-29T23:45:27.602688",
   "data": [
     {
       "branch_id": "famd",
@@ -39,7 +39,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 12,
-      "contract_history_id": 3033,
+      "contract_history_id": 3035,
       "term_hold_start": "2025-03-02",
       "term_hold_end": "2025-03-17",
       "term_hold_reason": "건강",
@@ -50,7 +50,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 13,
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "term_hold_start": "2025-05-09",
       "term_hold_end": "2025-06-07",
       "term_hold_reason": "건강",
@@ -72,7 +72,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 15,
-      "contract_history_id": 3207,
+      "contract_history_id": 3209,
       "term_hold_start": "2025-01-01",
       "term_hold_end": "2025-01-28",
       "term_hold_reason": "건강",
@@ -105,7 +105,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 19,
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "term_hold_start": "2025-06-07",
       "term_hold_end": "2025-06-21",
       "term_hold_reason": "건강",
@@ -160,7 +160,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 24,
-      "contract_history_id": 2995,
+      "contract_history_id": 2997,
       "term_hold_start": "2025-07-11",
       "term_hold_end": "2025-07-25",
       "term_hold_reason": "건강",
@@ -424,7 +424,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 51,
-      "contract_history_id": 2995,
+      "contract_history_id": 2997,
       "term_hold_start": "2025-10-02",
       "term_hold_end": "2025-10-16",
       "term_hold_reason": "건강",
@@ -468,7 +468,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 55,
-      "contract_history_id": 3218,
+      "contract_history_id": 3220,
       "term_hold_start": "2025-10-19",
       "term_hold_end": "2025-11-17",
       "term_hold_reason": "건강",
@@ -479,7 +479,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 56,
-      "contract_history_id": 3218,
+      "contract_history_id": 3220,
       "term_hold_start": "2025-11-17",
       "term_hold_end": "2025-12-14",
       "term_hold_reason": "건강",
@@ -490,7 +490,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 57,
-      "contract_history_id": 3218,
+      "contract_history_id": 3220,
       "term_hold_start": "2025-12-14",
       "term_hold_end": "2026-01-12",
       "term_hold_reason": "건강",
@@ -501,7 +501,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 58,
-      "contract_history_id": 3218,
+      "contract_history_id": 3220,
       "term_hold_start": "2026-01-12",
       "term_hold_end": "2026-01-13",
       "term_hold_reason": "건강",
@@ -512,7 +512,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 59,
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "term_hold_start": "2025-08-25",
       "term_hold_end": "2025-09-23",
       "term_hold_reason": "건강",
@@ -523,7 +523,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 60,
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "term_hold_start": "2025-09-24",
       "term_hold_end": "2025-10-23",
       "term_hold_reason": "건강",
@@ -534,7 +534,7 @@
     {
       "branch_id": "famd",
       "term_hold_id": 61,
-      "contract_history_id": 2742,
+      "contract_history_id": 2744,
       "term_hold_start": "2025-10-24",
       "term_hold_end": "2025-10-31",
       "term_hold_reason": "건강",

@@ -513,15 +513,83 @@ def drop_table_if_exists(cursor, table_name: str):
 
 
 def create_table(cursor, create_sql: str, table_name: str):
-    """테이블 생성"""
+    """테이블 생성 및 RLS 활성화"""
     try:
         cursor.execute(create_sql)
         print(f"  ✓ 테이블 생성 완료: {table_name}")
+        
+        # RLS 활성화 및 기본 정책 생성
+        enable_rls_for_table(cursor, table_name)
+        
         return True
     except Exception as e:
         print(f"  ✗ 테이블 생성 실패: {str(e)}")
         print(f"    SQL: {create_sql[:200]}...")
         return False
+
+
+def enable_rls_for_table(cursor, table_name: str):
+    """테이블에 RLS 활성화 및 기본 정책 생성"""
+    try:
+        # 1. RLS 활성화
+        cursor.execute(f'ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY')
+        print(f"  ✓ RLS 활성화: {table_name}")
+        
+        # 2. 기본 정책 생성 (모든 접근 허용 - 기존 동작 유지)
+        # 기존 정책이 있으면 삭제
+        for policy_suffix in ['allow_all_select', 'allow_all_insert', 'allow_all_update', 'allow_all_delete']:
+            full_policy_name = f'{policy_suffix}_{table_name}'
+            try:
+                cursor.execute(f'DROP POLICY IF EXISTS {full_policy_name} ON {table_name}')
+            except:
+                pass
+        
+        # SELECT 정책
+        try:
+            cursor.execute(f'''
+                CREATE POLICY allow_all_select_{table_name} ON {table_name}
+                FOR SELECT
+                USING (true)
+            ''')
+        except Exception as e:
+            print(f"  ⚠ SELECT 정책 생성 중 오류 (무시): {str(e)[:50]}")
+        
+        # INSERT 정책
+        try:
+            cursor.execute(f'''
+                CREATE POLICY allow_all_insert_{table_name} ON {table_name}
+                FOR INSERT
+                WITH CHECK (true)
+            ''')
+        except Exception as e:
+            print(f"  ⚠ INSERT 정책 생성 중 오류 (무시): {str(e)[:50]}")
+        
+        # UPDATE 정책
+        try:
+            cursor.execute(f'''
+                CREATE POLICY allow_all_update_{table_name} ON {table_name}
+                FOR UPDATE
+                USING (true)
+                WITH CHECK (true)
+            ''')
+        except Exception as e:
+            print(f"  ⚠ UPDATE 정책 생성 중 오류 (무시): {str(e)[:50]}")
+        
+        # DELETE 정책
+        try:
+            cursor.execute(f'''
+                CREATE POLICY allow_all_delete_{table_name} ON {table_name}
+                FOR DELETE
+                USING (true)
+            ''')
+        except Exception as e:
+            print(f"  ⚠ DELETE 정책 생성 중 오류 (무시): {str(e)[:50]}")
+        
+        print(f"  ✓ RLS 정책 생성 완료: {table_name}")
+        
+    except Exception as e:
+        print(f"  ⚠ RLS 활성화 중 오류 (무시): {str(e)[:50]}")
+        # RLS 활성화 실패해도 테이블 생성은 성공으로 처리
 
 
 def get_value_case_insensitive(row: Dict[str, Any], col: str) -> Any:

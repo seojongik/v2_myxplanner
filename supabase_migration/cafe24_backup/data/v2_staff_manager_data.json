@@ -1,7 +1,7 @@
 {
   "table_name": "v2_staff_manager",
   "row_count": 20,
-  "backup_timestamp": "2025-11-28T21:46:35.572959",
+  "backup_timestamp": "2025-11-29T23:45:30.604314",
   "data": [
     {
       "manager_contract_id": 1,

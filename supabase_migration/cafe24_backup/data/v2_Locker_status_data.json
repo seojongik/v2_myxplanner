@@ -1,7 +1,7 @@
 {
   "table_name": "v2_Locker_status",
   "row_count": 155,
-  "backup_timestamp": "2025-11-28T21:46:32.396866",
+  "backup_timestamp": "2025-11-29T23:45:27.353602",
   "data": [
     {
       "locker_id": 1,
@@ -1246,15 +1246,15 @@
       "locker_price": -20000,
       "payment_frequency": "정기결제(월별)",
       "payment_method": "크레딧 결제",
-      "member_id": 376,
+      "member_id": null,
       "locker_discount_condition": "기간권 이용제외",
-      "locker_discount_condition_min": 300,
-      "locker_discount_ratio": "0.50",
-      "registered_at": "2025-06-14T19:35:03",
-      "locker_start_date": "2024-03-30",
+      "locker_discount_condition_min": null,
+      "locker_discount_ratio": null,
+      "registered_at": "2025-11-28T19:04:58",
+      "locker_start_date": null,
       "locker_end_date": null,
       "locker_remark": null,
-      "staff_id": 3,
+      "staff_id": 20,
       "branch_id": "famd"
     },
     {
@@ -2124,7 +2124,7 @@
       "locker_discount_condition": "기간권 이용제외",
       "locker_discount_condition_min": null,
       "locker_discount_ratio": null,
-      "registered_at": "2025-11-04T17:33:57",
+      "registered_at": "2025-11-28T15:12:40",
       "locker_start_date": null,
       "locker_end_date": null,
       "locker_remark": null,

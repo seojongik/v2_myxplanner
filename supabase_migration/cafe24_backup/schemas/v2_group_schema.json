@@ -99,7 +99,7 @@
       "Seq_in_index": 1,
       "Column_name": "member_id",
       "Collation": "A",
-      "Cardinality": 299,
+      "Cardinality": 350,
       "Sub_part": null,
       "Packed": null,
       "Null": "YES",
@@ -107,5 +107,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:34.166908"
+  "backup_timestamp": "2025-11-29T23:45:29.145968"
 }

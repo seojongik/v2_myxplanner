@@ -92,5 +92,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_eventhandicap_TS` (\n  `branch_id` varchar(20) NOT NULL,\n  `ts_date` date DEFAULT NULL,\n  `ts_payment_method` varchar(20) DEFAULT NULL,\n  `ts_status` varchar(20) DEFAULT NULL,\n  `member_id` int(11) DEFAULT NULL,\n  `member_type` varchar(20) DEFAULT NULL,\n  `member_name` varchar(50) DEFAULT NULL,\n  `member_phone` varchar(20) DEFAULT NULL,\n  `ts_min` int(11) DEFAULT NULL,\n  `time_stamp` datetime DEFAULT NULL,\n  `memo` text DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:34.125637"
+  "backup_timestamp": "2025-11-29T23:45:29.117086"
 }

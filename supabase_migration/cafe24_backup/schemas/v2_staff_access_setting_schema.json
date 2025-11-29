@@ -148,5 +148,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_staff_access_setting` (\n  `staff_access_id` varchar(30) DEFAULT NULL,\n  `branch_id` varchar(30) DEFAULT NULL,\n  `member_registration` varchar(30) DEFAULT NULL,\n  `member_page` varchar(30) DEFAULT NULL,\n  `communication` varchar(30) DEFAULT NULL,\n  `ts_management` varchar(30) DEFAULT NULL,\n  `lesson_status` varchar(30) DEFAULT NULL,\n  `salary_view` varchar(30) DEFAULT NULL,\n  `staff_schedule` varchar(30) DEFAULT NULL,\n  `pro_schedule` varchar(30) DEFAULT NULL,\n  `hr_management` varchar(30) DEFAULT NULL,\n  `locker` varchar(30) DEFAULT NULL,\n  `branch_settings` varchar(30) DEFAULT NULL,\n  `branch_operation` varchar(30) DEFAULT NULL,\n  `staff_name` varchar(30) DEFAULT NULL,\n  `pro_name` varchar(30) DEFAULT NULL,\n  `salary_management` varchar(30) DEFAULT NULL,\n  `client_app` varchar(30) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:35.526721"
+  "backup_timestamp": "2025-11-29T23:45:30.568259"
 }

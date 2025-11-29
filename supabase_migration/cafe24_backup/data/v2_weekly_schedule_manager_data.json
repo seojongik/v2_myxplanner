@@ -1,7 +1,7 @@
 {
   "table_name": "v2_weekly_schedule_manager",
   "row_count": 42,
-  "backup_timestamp": "2025-11-28T21:46:35.707023",
+  "backup_timestamp": "2025-11-29T23:45:30.728876",
   "data": [
     {
       "branch_id": "test",

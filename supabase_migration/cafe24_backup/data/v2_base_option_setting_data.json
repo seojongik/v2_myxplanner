@@ -1,7 +1,7 @@
 {
   "table_name": "v2_base_option_setting",
   "row_count": 123,
-  "backup_timestamp": "2025-11-28T21:46:32.527480",
+  "backup_timestamp": "2025-11-29T23:45:27.475883",
   "data": [
     {
       "branch_id": "test",

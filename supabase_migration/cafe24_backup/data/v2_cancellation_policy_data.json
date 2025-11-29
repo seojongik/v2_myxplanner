@@ -1,7 +1,7 @@
 {
   "table_name": "v2_cancellation_policy",
   "row_count": 27,
-  "backup_timestamp": "2025-11-28T21:46:33.925862",
+  "backup_timestamp": "2025-11-29T23:45:28.929503",
   "data": [
     {
       "branch_id": "test",

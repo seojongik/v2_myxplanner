@@ -91,7 +91,7 @@
       "Seq_in_index": 1,
       "Column_name": "scheduled_staff_id",
       "Collation": "A",
-      "Cardinality": 5299,
+      "Cardinality": 5182,
       "Sub_part": null,
       "Packed": null,
       "Null": "",
@@ -99,5 +99,5 @@
       "Comment": ""
     }
   ],
-  "backup_timestamp": "2025-11-28T21:46:35.371919"
+  "backup_timestamp": "2025-11-29T23:45:30.408169"
 }

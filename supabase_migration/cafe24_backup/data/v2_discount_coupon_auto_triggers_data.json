@@ -1,7 +1,7 @@
 {
   "table_name": "v2_discount_coupon_auto_triggers",
   "row_count": 5,
-  "backup_timestamp": "2025-11-28T21:46:34.036234",
+  "backup_timestamp": "2025-11-29T23:45:29.026018",
   "data": [
     {
       "trigger_id": 1,

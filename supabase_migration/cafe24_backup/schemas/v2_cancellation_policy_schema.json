@@ -52,5 +52,5 @@
   ],
   "create_statement": "CREATE TABLE `v2_cancellation_policy` (\n  `branch_id` varchar(20) DEFAULT NULL,\n  `db_table` varchar(50) DEFAULT NULL,\n  `service_category` varchar(30) DEFAULT NULL,\n  `apply_sequence` int(11) DEFAULT NULL,\n  `_min_before_use` varchar(30) DEFAULT NULL,\n  `penalty_percent` varchar(50) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   "indexes": [],
-  "backup_timestamp": "2025-11-28T21:46:33.916752"
+  "backup_timestamp": "2025-11-29T23:45:28.922969"
 }
