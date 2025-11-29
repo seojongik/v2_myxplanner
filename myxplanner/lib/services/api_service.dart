@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:crypto/crypto.dart';
 import 'holiday_service.dart';
+import 'password_service.dart';
 import 'login_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -117,6 +117,9 @@ class ApiService {
     _currentBranchId = branchId;
     _currentBranch = branchData;
     _saveLoginStateToStorage();
+    
+    // SupabaseAdapter에 branch_id 설정 (보안 강화)
+    SupabaseAdapter.setBranchId(branchId);
   }
 
   // 현재 사용자 설정
@@ -854,6 +857,9 @@ class ApiService {
   // 로그아웃 (상태 초기화)
   static Future<void> logout() async {
     _currentBranchId = null;
+    
+    // SupabaseAdapter의 branch_id도 초기화 (보안 강화)
+    SupabaseAdapter.setBranchId(null);
     _currentUser = null;
     _currentBranch = null;
     _isAdminLogin = false;
@@ -873,13 +879,6 @@ class ApiService {
 
   // ========== 로그인 관련 함수들 ==========
 
-  // 비밀번호 해시 함수
-  static String _hashPassword(String password) {
-    final bytes = utf8.encode(password);
-    final digest = sha256.convert(bytes);
-    // DB가 VARCHAR(100)로 수정되었으므로 전체 64자리 해시 사용
-    return digest.toString();
-  }
 
   // 로그인 함수
   static Future<Map<String, dynamic>> login({
@@ -912,26 +911,47 @@ class ApiService {
         throw Exception('아이디(전화번호)와 비밀번호를 확인해주세요.');
       }
       
-      // 비밀번호 검증 (평문 또는 해시)
+      // 비밀번호 검증 (PasswordService 사용 - bcrypt, SHA-256, 평문 모두 지원)
       print('🔐 비밀번호 검증 시작...');
       final List<Map<String, dynamic>> validMembers = [];
-      final hashedPassword = _hashPassword(password);
-      print('입력된 비밀번호 해시: $hashedPassword');
       
       for (int i = 0; i < allMembers.length; i++) {
         final member = allMembers[i];
         final storedPassword = member['member_password']?.toString() ?? '';
         
         print('회원 ${i+1} 비밀번호 검증:');
-        print('  저장된 비밀번호: "$storedPassword"');
-        print('  입력된 평문: "$password"');
-        print('  입력된 해시: "$hashedPassword"');
-        print('  평문 일치: ${storedPassword == password}');
-        print('  해시 일치: ${storedPassword == hashedPassword}');
+        print('  저장된 비밀번호: "$storedPassword" (타입: ${PasswordService.getHashType(storedPassword)})');
+        print('  입력된 비밀번호: "$password"');
         
-        // 평문 비밀번호 또는 해시된 비밀번호 모두 확인
-        if (storedPassword == password || storedPassword == hashedPassword) {
+        // PasswordService를 사용한 비밀번호 검증
+        final isValid = PasswordService.verifyPassword(password, storedPassword);
+        
+        if (isValid) {
           print('  ✅ 비밀번호 일치! 유효한 회원으로 추가');
+          
+          // 자동 마이그레이션: 기존 SHA-256 또는 평문 비밀번호를 bcrypt로 변환
+          final hashType = PasswordService.getHashType(storedPassword);
+          if (hashType != 'bcrypt') {
+            print('  🔄 비밀번호 자동 마이그레이션 (${hashType} → bcrypt)');
+            try {
+              final bcryptHash = PasswordService.hashPassword(password);
+              final memberId = member['member_id']?.toString();
+              if (memberId != null) {
+                await updateData(
+                  table: 'v3_members',
+                  data: {'member_password': bcryptHash},
+                  where: [
+                    {'field': 'member_id', 'operator': '=', 'value': memberId},
+                  ],
+                );
+                member['member_password'] = bcryptHash;
+                print('  ✅ 비밀번호 bcrypt로 마이그레이션 완료');
+              }
+            } catch (e) {
+              print('  ⚠️ 비밀번호 마이그레이션 실패 (계속 진행): $e');
+            }
+          }
+          
           validMembers.add(member);
         } else {
           print('  ❌ 비밀번호 불일치');

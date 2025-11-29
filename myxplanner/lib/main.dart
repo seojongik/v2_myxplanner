@@ -22,12 +22,17 @@ import 'utils/debug_logger.dart';
 import 'stubs/html_stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'services/fcm_service.dart';
 import 'services/supabase_adapter.dart';
+import 'services/config_service.dart';
 
 void main() async {
   // 강제로 로그 출력 (예외 발생 전에도 보이도록)
   print('🚀🚀🚀 main() 함수 시작 🚀🚀🚀');
   debugPrint('🚀🚀🚀 main() 함수 시작 🚀🚀🚀');
   DebugLogger.log('🚀🚀🚀 main() 함수 시작 🚀🚀🚀', tag: 'MAIN');
+  
+  // 설정 파일 초기화 (루트의 .env.local.json에서 읽기)
+  await ConfigService.initialize();
+  print('⚙️ 설정 파일 초기화 완료');
   
   try {
     // Flutter 바인딩 초기화

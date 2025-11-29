@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Supabase 어댑터
+/// Supabase 어댑터 (CRM용)
 /// 
 /// 기존 dynamic_api.php와 동일한 요청/응답 형식을 유지하면서
 /// 백엔드를 Supabase로 교체합니다.
@@ -9,13 +9,41 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// 1. operation → Supabase 메서드 매핑
 /// 2. where 조건 → .eq(), .gt(), .ilike() 등으로 변환
 /// 3. PostgreSQL 응답 → 앱이 기대하는 형식으로 변환
+import 'config_service.dart';
+
 class SupabaseAdapter {
-  // Supabase 설정
-  static const String supabaseUrl = 'https://yejialakeivdhwntmagf.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllamlhbGFrZWl2ZGh3bnRtYWdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MTE0MjcsImV4cCI6MjA3OTQ4NzQyN30.a1WA6V7pD2tss1pkh1OSJcuknt6FTyeabvm9UzNjcfs';
+  // Supabase 설정 (설정 파일에서 읽기)
+  static String get supabaseUrl {
+    final config = ConfigService.getSupabaseConfig();
+    return config['url'] as String? ?? 'https://yejialakeivdhwntmagf.supabase.co';
+  }
+  
+  static String get supabaseAnonKey {
+    final config = ConfigService.getSupabaseConfig();
+    return config['anonKey'] as String? ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllamlhbGFrZWl2ZGh3bnRtYWdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MTE0MjcsImV4cCI6MjA3OTQ4NzQyN30.a1WA6V7pD2tss1pkh1OSJcuknt6FTyeabvm9UzNjcfs';
+  }
   
   static SupabaseClient? _client;
   static bool _initialized = false;
+  
+  // Supabase 사용 여부 플래그 (전환 시 사용)
+  static bool useSupabase = true;
+  
+  // 현재 지점 ID (보안 강화: 모든 쿼리에 branch_id 필터 강제)
+  static String? _currentBranchId;
+  
+  /// 현재 지점 ID 설정 (ApiService.setCurrentBranch()에서 호출)
+  static void setBranchId(String? branchId) {
+    _currentBranchId = branchId;
+    if (branchId != null) {
+      print('🔒 [CRM] SupabaseAdapter branch_id 설정: $branchId');
+    }
+  }
+  
+  /// 현재 지점 ID 가져오기
+  static String? getBranchId() {
+    return _currentBranchId;
+  }
   
   /// Supabase 초기화
   static Future<void> initialize() async {
@@ -27,7 +55,7 @@ class SupabaseAdapter {
     );
     _client = Supabase.instance.client;
     _initialized = true;
-    print('✅ Supabase 초기화 완료');
+    print('✅ [CRM] Supabase 초기화 완료');
   }
   
   /// Supabase 클라이언트 가져오기
@@ -38,7 +66,68 @@ class SupabaseAdapter {
     return _client!;
   }
   
+  /// 초기화 상태 확인
+  static bool get isInitialized => _initialized;
+  
   // ========== 데이터 조회 (GET) ==========
+  
+  // 테이블명 매핑 (legacy → v2)
+  static String _mapTableName(String table) {
+    const tableMapping = {
+      'board': 'v2_board',
+      'Board': 'v2_board',
+      'staff': 'v2_staff_pro',
+      'Staff': 'v2_staff_pro',
+    };
+    return tableMapping[table] ?? table;
+  }
+  
+  // branch_id 필터링이 필요 없는 테이블 목록
+  static const Set<String> _excludedBranchFilterTables = {
+    'v2_branch',
+    'staff',
+    'v2_staff_pro',
+    'v2_staff_manager',
+  };
+  
+  /// branch_id 필터 강제 추가 (보안 강화)
+  static List<Map<String, dynamic>> _enforceBranchFilter(
+    List<Map<String, dynamic>>? where,
+    String tableName,
+  ) {
+    final lowerTableName = tableName.toLowerCase();
+    
+    // 제외 테이블 체크
+    if (_excludedBranchFilterTables.contains(lowerTableName) ||
+        _excludedBranchFilterTables.contains(tableName)) {
+      return where ?? [];
+    }
+    
+    // branch_id 가져오기
+    final branchId = _currentBranchId;
+    if (branchId == null) {
+      throw Exception('보안 오류: 지점 정보가 설정되지 않았습니다. 로그인 후 다시 시도하세요.');
+    }
+    
+    // 이미 branch_id 조건이 있는지 확인
+    final hasBranchCondition = (where ?? []).any((condition) {
+      final field = (condition['field'] as String?)?.toLowerCase();
+      return field == 'branch_id';
+    });
+    
+    if (hasBranchCondition) {
+      return where ?? [];
+    }
+    
+    // branch_id 필터 강제 추가
+    final branchCondition = {
+      'field': 'branch_id',
+      'operator': '=',
+      'value': branchId,
+    };
+    
+    return [...(where ?? []), branchCondition];
+  }
   
   static Future<List<Map<String, dynamic>>> getData({
     required String table,
@@ -49,8 +138,10 @@ class SupabaseAdapter {
     int? offset,
   }) async {
     try {
+      // 테이블명 매핑 (legacy → v2)
+      final mappedTable = _mapTableName(table);
       // PostgreSQL은 테이블/컬럼 이름을 소문자로 저장함
-      final tableName = table.toLowerCase();
+      final tableName = mappedTable.toLowerCase();
       
       // 1. SELECT 필드 설정 (컬럼명 소문자 변환)
       final selectFields = (fields == null || fields.isEmpty || fields.contains('*'))
@@ -60,16 +151,19 @@ class SupabaseAdapter {
       // 2. 기본 쿼리 생성 (dynamic 타입으로 체이닝)
       dynamic query = client.from(tableName).select(selectFields);
       
-      // 3. WHERE 조건 적용 (컬럼명 소문자 변환)
-      if (where != null && where.isNotEmpty) {
-        final lowerWhere = where.map((w) => <String, dynamic>{
+      // 3. 보안 강화: branch_id 필터 강제 추가
+      final enforcedWhere = _enforceBranchFilter(where, tableName);
+      
+      // 4. WHERE 조건 적용 (컬럼명 소문자 변환)
+      if (enforcedWhere.isNotEmpty) {
+        final lowerWhere = enforcedWhere.map((w) => <String, dynamic>{
           ...w,
           'field': (w['field'] as String?)?.toLowerCase(),
         }).toList();
         query = _applyWhereConditions(query, lowerWhere);
       }
       
-      // 4. ORDER BY 적용 (컬럼명 소문자 변환)
+      // 5. ORDER BY 적용 (컬럼명 소문자 변환)
       if (orderBy != null && orderBy.isNotEmpty) {
         for (final order in orderBy) {
           final field = (order['field'] as String?)?.toLowerCase();
@@ -80,7 +174,7 @@ class SupabaseAdapter {
         }
       }
       
-      // 5. LIMIT & OFFSET 적용
+      // 6. LIMIT & OFFSET 적용
       if (limit != null) {
         query = query.limit(limit);
       }
@@ -88,17 +182,17 @@ class SupabaseAdapter {
         query = query.range(offset, offset + (limit ?? 100) - 1);
       }
       
-      // 6. 쿼리 실행
+      // 7. 쿼리 실행
       final response = await query;
       
-      // 7. 응답 변환 (PostgreSQL → 앱 형식)
+      // 8. 응답 변환 (PostgreSQL → 앱 형식)
       final List<Map<String, dynamic>> result = 
           List<Map<String, dynamic>>.from(response);
       
       return _convertResponseData(result);
       
     } catch (e) {
-      print('❌ Supabase getData 오류: $e');
+      print('❌ [CRM] Supabase getData 오류: $e');
       throw Exception('데이터 조회 오류: $e');
     }
   }
@@ -106,23 +200,35 @@ class SupabaseAdapter {
   // ========== 데이터 추가 (ADD) ==========
   
   // 테이블별 자동 증가(AUTO INCREMENT) primary key 컬럼 매핑
-  // PostgreSQL에서 SERIAL/BIGSERIAL로 설정된 컬럼들
-  // 주의: member_id, contract_history_id 등은 해당 테이블에서만 PK이고,
-  //       다른 테이블에서는 FK로 사용되므로 값이 필요함!
-  // 주의: v2_priced_ts의 ts_id는 선택한 타석 번호이므로 자동 증가 아님!
   static const Map<String, List<String>> _tableAutoIncrementColumns = {
     'v2_board_by_member': ['memberboard_id'],
     'v2_board_by_member_replies': ['reply_id'],
     'v2_bills': ['bill_id'],
     'v2_bill_term': ['bill_term_id'],
     'v2_bill_term_hold': ['term_hold_id'],
-    // 'v2_priced_ts': [], // ts_id는 선택한 타석 번호, 자동 증가 아님!
-    // 'v2_priced_ls': [], // ls_id는 별도 확인 필요
-    'v2_member': ['member_id'],
+    'v2_bill_times': ['bill_min_id'],
+    'v2_bill_games': ['bill_game_id'],
+    'v2_bill_games_group': ['group_play_id'],
+    'v2_members': ['member_id'],
+    'v3_members': ['member_id'],
     'v2_contracts': ['contract_id'],
     'v3_contract_history': ['contract_history_id'],
     'v3_ls_countings': ['ls_counting_id'],
     'v2_discount_coupon': ['coupon_id'],
+    'v2_discount_coupon_auto_triggers': ['trigger_id'],
+    'v2_board': ['board_id'],
+    'v2_board_comment': ['comment_id'],
+    'v2_locker_status': ['locker_id'],
+    'v2_locker_bill': ['locker_bill_id'],
+    'v2_message': ['msg_id'],
+    'v2_portone_payments': ['portone_payment_id'],
+    'v2_schedule_adjusted_pro': ['scheduled_staff_id'],
+    'v2_schedule_adjusted_manager': ['scheduled_staff_id'],
+    'v2_staff_pro': ['pro_contract_id'],
+    'v2_staff_manager': ['manager_contract_id'],
+    'v2_term_member': ['term_id'],
+    'v2_wol_settings': ['pc_id'],
+    'v2_member_pro_match': ['member_pro_relation_id'],
   };
 
   static Future<Map<String, dynamic>> addData({
@@ -130,11 +236,14 @@ class SupabaseAdapter {
     required Map<String, dynamic> data,
   }) async {
     try {
-      // PostgreSQL은 테이블/컬럼 이름을 소문자로 저장함
-      final tableName = table.toLowerCase();
+      // 테이블명 매핑 (legacy → v2) + 소문자 변환
+      final tableName = _mapTableName(table).toLowerCase();
+      
+      // 보안 강화: branch_id 자동 추가 (제외 테이블 제외)
+      final finalData = _enforceBranchInData(data, tableName);
       
       // 데이터 변환 (앱 형식 → PostgreSQL)
-      final convertedData = _convertInputData(data);
+      final convertedData = _convertInputData(finalData);
       
       // 해당 테이블의 자동 증가 컬럼 목록 조회
       final autoIncrementCols = _tableAutoIncrementColumns[tableName] ?? [];
@@ -149,9 +258,7 @@ class SupabaseAdapter {
         }
       }
       
-      print('📝 Supabase INSERT - 테이블: $tableName');
-      print('📝 원본 데이터 키: ${convertedData.keys.toList()}');
-      print('📝 정리된 데이터 키: ${cleanedData.keys.toList()}');
+      print('📝 [CRM] Supabase INSERT - 테이블: $tableName');
       
       final response = await client
           .from(tableName)
@@ -160,24 +267,38 @@ class SupabaseAdapter {
           .single();
       
       // insertId 추출 (테이블의 primary key)
-      // 각 테이블별 PK 컬럼명 우선순위로 확인
-      // 주의: v2_priced_ts의 ts_id는 타석 번호이고, reservation_id가 PK!
-      final insertId = response['memberboard_id'] ??   // v2_board_by_member
-                       response['reply_id'] ??         // v2_board_by_member_replies
-                       response['bill_id'] ??          // v2_bills
-                       response['bill_term_id'] ??     // v2_bill_term
-                       response['term_hold_id'] ??     // v2_bill_term_hold
-                       response['coupon_id'] ??        // v2_discount_coupon
-                       response['member_id'] ??        // v2_member
-                       response['contract_id'] ??      // v2_contracts
-                       response['contract_history_id'] ?? // v3_contract_history
-                       response['LS_counting_id'] ??   // v3_ls_countings
-                       response['LS_id'] ??            // v2_priced_ls
-                       response['id'] ??               // 일반적인 id 컬럼
-                       response['reservation_id'] ??   // v2_priced_ts 등 예약 테이블
+      // 주의: 순서가 중요함! 특정 테이블의 primary key를 먼저 체크
+      final insertId = response['contract_history_id'] ??  // v3_contract_history
+                       response['ls_counting_id'] ??       // v3_ls_countings
+                       response['bill_id'] ??              // v2_bills
+                       response['bill_term_id'] ??
+                       response['term_hold_id'] ??
+                       response['bill_min_id'] ??
+                       response['bill_game_id'] ??
+                       response['group_play_id'] ??
+                       response['coupon_id'] ??
+                       response['trigger_id'] ??
+                       response['memberboard_id'] ??
+                       response['reply_id'] ??
+                       response['member_id'] ??            // member_id는 나중에
+                       response['contract_id'] ??
+                       response['board_id'] ??
+                       response['comment_id'] ??
+                       response['locker_id'] ??
+                       response['locker_bill_id'] ??
+                       response['msg_id'] ??
+                       response['portone_payment_id'] ??
+                       response['scheduled_staff_id'] ??
+                       response['pro_contract_id'] ??
+                       response['manager_contract_id'] ??
+                       response['term_id'] ??
+                       response['pc_id'] ??
+                       response['member_pro_relation_id'] ??
+                       response['id'] ??
+                       response['reservation_id'] ??
                        'unknown';
       
-      print('✅ Supabase INSERT 성공 - insertId: $insertId');
+      print('✅ [CRM] Supabase INSERT 성공 - insertId: $insertId');
       
       return {
         'success': true,
@@ -187,7 +308,7 @@ class SupabaseAdapter {
       };
       
     } catch (e) {
-      print('❌ Supabase addData 오류: $e');
+      print('❌ [CRM] Supabase addData 오류: $e');
       throw Exception('데이터 추가 오류: $e');
     }
   }
@@ -200,12 +321,15 @@ class SupabaseAdapter {
     required List<Map<String, dynamic>> where,
   }) async {
     try {
-      // PostgreSQL은 테이블/컬럼 이름을 소문자로 저장함
-      final tableName = table.toLowerCase();
+      // 테이블명 매핑 (legacy → v2) + 소문자 변환
+      final tableName = _mapTableName(table).toLowerCase();
       
       if (where.isEmpty) {
         throw Exception('업데이트 조건이 지정되지 않았습니다.');
       }
+      
+      // 보안 강화: branch_id 필터 강제 추가
+      final enforcedWhere = _enforceBranchFilter(where, tableName);
       
       // 데이터 변환 (컬럼명 소문자 변환)
       final convertedData = _convertInputData(data);
@@ -215,7 +339,7 @@ class SupabaseAdapter {
       }
       
       // WHERE 조건 컬럼명 소문자 변환
-      final lowerWhere = where.map((w) => <String, dynamic>{
+      final lowerWhere = enforcedWhere.map((w) => <String, dynamic>{
         ...w,
         'field': (w['field'] as String?)?.toLowerCase(),
       }).toList();
@@ -235,7 +359,7 @@ class SupabaseAdapter {
       };
       
     } catch (e) {
-      print('❌ Supabase updateData 오류: $e');
+      print('❌ [CRM] Supabase updateData 오류: $e');
       throw Exception('데이터 업데이트 오류: $e');
     }
   }
@@ -247,15 +371,18 @@ class SupabaseAdapter {
     required List<Map<String, dynamic>> where,
   }) async {
     try {
-      // PostgreSQL은 테이블/컬럼 이름을 소문자로 저장함
-      final tableName = table.toLowerCase();
+      // 테이블명 매핑 (legacy → v2) + 소문자 변환
+      final tableName = _mapTableName(table).toLowerCase();
       
       if (where.isEmpty) {
         throw Exception('삭제 조건이 지정되지 않았습니다.');
       }
       
+      // 보안 강화: branch_id 필터 강제 추가
+      final enforcedWhere = _enforceBranchFilter(where, tableName);
+      
       // WHERE 조건 컬럼명 소문자 변환
-      final lowerWhere = where.map((w) => <String, dynamic>{
+      final lowerWhere = enforcedWhere.map((w) => <String, dynamic>{
         ...w,
         'field': (w['field'] as String?)?.toLowerCase(),
       }).toList();
@@ -275,7 +402,7 @@ class SupabaseAdapter {
       };
       
     } catch (e) {
-      print('❌ Supabase deleteData 오류: $e');
+      print('❌ [CRM] Supabase deleteData 오류: $e');
       throw Exception('데이터 삭제 오류: $e');
     }
   }
@@ -323,7 +450,6 @@ class SupabaseAdapter {
         case 'LIKE':
           // MySQL의 LIKE '%값%' → Supabase의 ilike (대소문자 무시)
           String pattern = value.toString();
-          // % 와일드카드를 * 로 변환하지 않음 (Supabase도 % 사용)
           query = query.ilike(field, pattern);
           break;
         case 'IN':
@@ -338,7 +464,7 @@ class SupabaseAdapter {
           query = query.not(field, 'is', null);
           break;
         default:
-          print('⚠️ 지원하지 않는 연산자: $operator');
+          print('⚠️ [CRM] 지원하지 않는 연산자: $operator');
       }
     }
     
@@ -347,12 +473,18 @@ class SupabaseAdapter {
   
   // ========== 데이터 형식 변환 ==========
   
+  /// 민감한 필드 목록 (응답에서 자동 제거)
+  static const Set<String> _sensitiveFields = {
+    'staff_access_password',
+    'member_password',
+    'branch_password',
+    'password',
+    'api_secret',
+    'secret_key',
+    'private_key',
+  };
+  
   /// PostgreSQL 응답 → 앱이 기대하는 형식으로 변환
-  /// 
-  /// 변환 내용:
-  /// - BOOLEAN (true/false) → int (1/0)
-  /// - TIMESTAMPTZ → DATETIME 형식
-  /// - NULL 처리
   static List<Map<String, dynamic>> _convertResponseData(
     List<Map<String, dynamic>> data,
   ) {
@@ -365,6 +497,17 @@ class SupabaseAdapter {
     for (final entry in row.entries) {
       // 컬럼명을 원래 패턴으로 복원 (PostgreSQL 소문자 → 원래 대소문자)
       final originalKey = _restoreColumnName(entry.key);
+      final lowerKey = entry.key.toLowerCase();
+      
+      // 민감 필드 자동 제거 (보안 강화)
+      if (_sensitiveFields.contains(lowerKey) || 
+          lowerKey.contains('password') || 
+          lowerKey.contains('secret') ||
+          lowerKey.contains('private_key')) {
+        // 민감 필드는 제외 (로그에도 출력하지 않음)
+        continue;
+      }
+      
       converted[originalKey] = _convertValue(entry.value);
     }
     
@@ -372,17 +515,10 @@ class SupabaseAdapter {
   }
   
   /// PostgreSQL 소문자 컬럼명을 원래 대소문자 패턴으로 복원
-  /// 
-  /// 변환 규칙:
-  /// 1. 접두사: ls_counting_id → LS_counting_id
-  /// 2. 중간 패턴: contract_ls_min → contract_LS_min
-  /// 
-  /// 주의: ts_ 접두사는 원래 소문자이므로 변환하지 않음
   static String _restoreColumnName(String columnName) {
     String result = columnName;
     
-    // 1. 접두사 매핑 (소문자 → 대문자)
-    // 주의: ts_ 접두사는 원래 소문자로 사용되므로 변환하지 않음
+    // 접두사 매핑 (소문자 → 대문자)
     final prefixMappings = <String, String>{
       'ls_': 'LS_',
       'fms_': 'FMS_',
@@ -397,11 +533,10 @@ class SupabaseAdapter {
       }
     }
     
-    // 2. 중간 패턴 매핑 (contract_ls_min → contract_LS_min 등)
-    // MariaDB 스키마에서 대문자로 사용되던 패턴들
+    // 중간 패턴 매핑
     final midPatternMappings = <String, String>{
-      '_ls_': '_LS_',   // contract_ls_min → contract_LS_min
-      '_ts_': '_TS_',   // contract_ts_min → contract_TS_min
+      '_ls_': '_LS_',
+      '_ts_': '_TS_',
     };
     
     for (final mapping in midPatternMappings.entries) {
@@ -434,15 +569,43 @@ class SupabaseAdapter {
     return value;
   }
   
+  /// branch_id를 데이터에 강제 추가 (보안 강화)
+  static Map<String, dynamic> _enforceBranchInData(
+    Map<String, dynamic> data,
+    String tableName,
+  ) {
+    final lowerTableName = tableName.toLowerCase();
+    
+    // 제외 테이블 체크
+    if (_excludedBranchFilterTables.contains(lowerTableName) ||
+        _excludedBranchFilterTables.contains(tableName)) {
+      return data;
+    }
+    
+    // branch_id 가져오기
+    final branchId = _currentBranchId;
+    if (branchId == null) {
+      throw Exception('보안 오류: 지점 정보가 설정되지 않았습니다. 로그인 후 다시 시도하세요.');
+    }
+    
+    // 이미 branch_id가 있으면 덮어쓰지 않음
+    if (data.containsKey('branch_id') || data.containsKey('branch_Id') || data.containsKey('BRANCH_ID')) {
+      return data;
+    }
+    
+    // branch_id 자동 추가
+    return {
+      ...data,
+      'branch_id': branchId,
+    };
+  }
+  
   /// 앱 입력 데이터 → PostgreSQL 형식으로 변환
   static Map<String, dynamic> _convertInputData(Map<String, dynamic> data) {
     final converted = <String, dynamic>{};
     
     for (final entry in data.entries) {
       final value = entry.value;
-      
-      // int (1/0) → BOOLEAN 은 변환 안 함 (PostgreSQL이 자동 처리)
-      // 날짜 문자열은 그대로 전달 (PostgreSQL이 파싱)
       converted[entry.key] = value;
     }
     
@@ -453,7 +616,6 @@ class SupabaseAdapter {
   
   /// ISO 8601 형식인지 확인
   static bool _isIsoDateTime(String value) {
-    // 2024-01-01T14:30:00.000Z 또는 2024-01-01T14:30:00+09:00 형식
     return RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}').hasMatch(value);
   }
   
@@ -463,7 +625,7 @@ class SupabaseAdapter {
       final dt = DateTime.parse(isoString);
       return _formatDateTime(dt);
     } catch (e) {
-      return isoString; // 변환 실패 시 원본 반환
+      return isoString;
     }
   }
   

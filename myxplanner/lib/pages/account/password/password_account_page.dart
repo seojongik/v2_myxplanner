@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:crypto/crypto.dart';
-import 'dart:convert';
 import '../../../services/api_service.dart';
+import '../../../services/password_service.dart';
 
 class PasswordAccountPage extends StatefulWidget {
   final bool isAdminMode;
@@ -74,12 +73,6 @@ class _PasswordAccountContentState extends State<PasswordAccountContent> {
     super.dispose();
   }
 
-  // 비밀번호 해시 함수
-  String _hashPassword(String password) {
-    final bytes = utf8.encode(password);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
 
   // 비밀번호 유효성 검사
   String? _validateNewPassword(String? value) {
@@ -144,24 +137,19 @@ class _PasswordAccountContentState extends State<PasswordAccountContent> {
       final currentPassword = _currentPasswordController.text;
       final newPassword = _newPasswordController.text;
       
-      // 현재 비밀번호 확인
+      // 현재 비밀번호 확인 (PasswordService 사용 - bcrypt, SHA-256, 평문 모두 지원)
       final storedPassword = currentUser['member_password']?.toString() ?? '';
-      bool isCurrentPasswordValid = false;
-      final hashedCurrentPassword = _hashPassword(currentPassword);
-      
-      // 기존 비밀번호가 해시된 경우와 평문인 경우 모두 확인
-      if (storedPassword.length == 64) { // SHA256 해시인 경우
-        isCurrentPasswordValid = storedPassword == hashedCurrentPassword;
-      } else { // 평문인 경우
-        isCurrentPasswordValid = storedPassword == currentPassword;
-      }
+      final isCurrentPasswordValid = PasswordService.verifyPassword(
+        currentPassword,
+        storedPassword,
+      );
       
       if (!isCurrentPasswordValid) {
         throw Exception('현재 비밀번호가 올바르지 않습니다');
       }
 
-      // 새 비밀번호 해시 처리
-      final hashedNewPassword = _hashPassword(newPassword);
+      // 새 비밀번호 해시 처리 (bcrypt 사용)
+      final hashedNewPassword = PasswordService.hashPassword(newPassword);
       final phoneNumber = currentUser['member_phone'];
       
       // 데이터베이스 업데이트 (전체 지점)

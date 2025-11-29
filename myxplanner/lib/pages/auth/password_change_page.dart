@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:crypto/crypto.dart';
-import 'dart:convert';
 import '../../services/api_service.dart';
+import '../../services/password_service.dart';
 
 class PasswordChangePage extends StatefulWidget {
   const PasswordChangePage({Key? key}) : super(key: key);
@@ -29,12 +28,6 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
     super.dispose();
   }
 
-  // 비밀번호 해시 함수 (ApiService와 동일)
-  String _hashPassword(String password) {
-    final bytes = utf8.encode(password);
-    final digest = sha256.convert(bytes);
-    return digest.toString(); // 전체 64자리 해시 사용
-  }
 
   // 기본 비밀번호 확인 (1111 또는 전화번호 뒤 4자리)
   bool _isDefaultPassword(String password, String phoneNumber) {
@@ -120,24 +113,14 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
       print('입력된 현재 비밀번호: "$currentPassword"');
       print('입력된 새 비밀번호: "$newPassword"');
       
-      // 현재 비밀번호 확인
+      // 현재 비밀번호 확인 (PasswordService 사용 - bcrypt, SHA-256, 평문 모두 지원)
       final storedPassword = currentUser['member_password']?.toString() ?? '';
       print('저장된 비밀번호: "$storedPassword" (길이: ${storedPassword.length})');
       
-      bool isCurrentPasswordValid = false;
-      final hashedCurrentPassword = _hashPassword(currentPassword);
-      print('입력된 현재 비밀번호 해시: $hashedCurrentPassword');
-      
-      // 기존 비밀번호가 해시된 경우와 평문인 경우 모두 확인
-      if (storedPassword.length == 64) { // SHA256 해시인 경우
-        print('🔍 해시 비밀번호로 판단하여 해시 비교');
-        isCurrentPasswordValid = storedPassword == hashedCurrentPassword;
-        print('해시 비교 결과: $isCurrentPasswordValid');
-      } else { // 평문인 경우
-        print('🔍 평문 비밀번호로 판단하여 평문 비교');
-        isCurrentPasswordValid = storedPassword == currentPassword;
-        print('평문 비교 결과: $isCurrentPasswordValid');
-      }
+      final isCurrentPasswordValid = PasswordService.verifyPassword(
+        currentPassword,
+        storedPassword,
+      );
       
       if (!isCurrentPasswordValid) {
         print('❌ 현재 비밀번호 불일치');
@@ -146,8 +129,8 @@ class _PasswordChangePageState extends State<PasswordChangePage> {
 
       print('✅ 현재 비밀번호 확인 완료');
       
-      // 새 비밀번호 해시 처리
-      final hashedNewPassword = _hashPassword(newPassword);
+      // 새 비밀번호 해시 처리 (bcrypt 사용)
+      final hashedNewPassword = PasswordService.hashPassword(newPassword);
       print('🔐 새 비밀번호 해시: $hashedNewPassword');
       
       // 데이터베이스 업데이트 (전체 지점)
