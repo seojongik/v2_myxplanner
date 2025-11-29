@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, User, Lock, Eye, EyeOff, ArrowLeftRight } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { getData } from '../lib/supabase';
+import { verifyPassword } from '../lib/password-service';
 
 interface LoginProps {
   onBack: () => void;
@@ -33,9 +34,12 @@ export function Login({ onBack, onRegisterClick }: LoginProps) {
       });
 
       if (proResult.success && proResult.data && proResult.data.length > 0) {
-        // Pro 테이블에서 비밀번호 확인
+        // Pro 테이블에서 비밀번호 확인 (해시 검증)
         for (const userData of proResult.data) {
-          if (userData.staff_access_password === password) {
+          const storedPassword = userData.staff_access_password || '';
+          const isValid = await verifyPassword(password, storedPassword);
+          
+          if (isValid) {
             userData.role = 'pro';
             console.log('✅ Pro로 로그인 성공');
             await handleLoginSuccess(userData);
@@ -54,9 +58,12 @@ export function Login({ onBack, onRegisterClick }: LoginProps) {
       });
 
       if (managerResult.success && managerResult.data && managerResult.data.length > 0) {
-        // Manager 테이블에서 비밀번호 확인
+        // Manager 테이블에서 비밀번호 확인 (해시 검증)
         for (const userData of managerResult.data) {
-          if (userData.staff_access_password === password) {
+          const storedPassword = userData.staff_access_password || '';
+          const isValid = await verifyPassword(password, storedPassword);
+          
+          if (isValid) {
             userData.role = 'manager';
             console.log('✅ Manager로 로그인 성공');
             await handleLoginSuccess(userData);
