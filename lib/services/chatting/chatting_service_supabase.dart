@@ -6,7 +6,7 @@ import '../api_service.dart';
 import '../supabase_adapter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'dart:html' as html;
+import 'package:audioplayers/audioplayers.dart';
 
 /// Supabase 기반 채팅 서비스 (회원 앱용)
 /// Firebase Firestore 대신 Supabase PostgreSQL + Realtime 사용
@@ -275,11 +275,10 @@ class ChattingServiceSupabase {
         }
       }
 
-      // 채팅방의 회원 읽지 않은 메시지 수 초기화
-      await _supabase.from('chat_rooms').update({
-        'member_unread_count': 0,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', chatRoomId);
+      // 주의: member_unread_count는 공유 필드이므로 업데이트하지 않음
+      // 회원의 읽음 상태는 read_by 필드로 관리되며, 카운트는 read_by 기반으로 계산됨
+      
+      print('✅ [읽음처리] 채팅방 $chatRoomId의 메시지를 읽음 처리 완료 (회원, read_by 업데이트됨)');
     } catch (e) {
       print('❌ 메시지 읽음 처리 실패: $e');
       rethrow;
@@ -287,6 +286,7 @@ class ChattingServiceSupabase {
   }
 
   // 읽지 않은 메시지 개수 스트림 (회원 기준)
+  // read_by 필드를 기반으로 회원이 읽지 않은 메시지 수 계산
   static Stream<int> getUnreadMessageCountStream() {
     final branchId = _getCurrentBranchId();
     final memberId = _getCurrentMemberId();
@@ -297,14 +297,30 @@ class ChattingServiceSupabase {
 
     final chatRoomId = ChatRoom.generateChatRoomId(branchId, memberId);
 
-    // 초기 데이터 로드
+    // 초기 데이터 로드 - read_by 필드를 기반으로 회원이 읽지 않은 메시지 수 계산
     final initialStream = Stream.fromFuture(
       _supabase
-          .from('chat_rooms')
-          .select('member_unread_count')
-          .eq('id', chatRoomId)
-          .maybeSingle()
-          .then((data) => data?['member_unread_count'] as int? ?? 0),
+          .from('chat_messages')
+          .select('read_by')
+          .eq('chat_room_id', chatRoomId)
+          .inFilter('sender_type', ['admin', 'pro', 'manager'])
+          .then((messages) {
+            int count = 0;
+            for (final msg in messages as List) {
+              final readBy = msg['read_by'] as Map<String, dynamic>? ?? {
+                'member': false,
+                'pro': false,
+                'manager': false,
+                'admin': false,
+              };
+              
+              // 회원이 읽지 않은 메시지면 카운트 증가
+              if (readBy['member'] != true) {
+                count++;
+              }
+            }
+            return count;
+          }),
     );
 
     return initialStream.asyncExpand((initialCount) {
@@ -324,10 +340,32 @@ class ChattingServiceSupabase {
               column: 'id',
               value: chatRoomId,
             ),
-            callback: (payload) {
-              final newRecord = payload.newRecord;
-              if (newRecord != null) {
-                changeStream.add(newRecord['member_unread_count'] as int? ?? 0);
+            callback: (payload) async {
+              // read_by 필드를 기반으로 회원이 읽지 않은 메시지 수 재계산
+              try {
+                final messages = await _supabase
+                    .from('chat_messages')
+                    .select('read_by')
+                    .eq('chat_room_id', chatRoomId)
+                    .inFilter('sender_type', ['admin', 'pro', 'manager']);
+                
+                int count = 0;
+                for (final msg in messages as List) {
+                  final readBy = msg['read_by'] as Map<String, dynamic>? ?? {
+                    'member': false,
+                    'pro': false,
+                    'manager': false,
+                    'admin': false,
+                  };
+                  
+                  if (readBy['member'] != true) {
+                    count++;
+                  }
+                }
+                
+                changeStream.add(count);
+              } catch (e) {
+                print('❌ 읽지 않은 메시지 수 업데이트 실패: $e');
               }
             },
           )
@@ -456,27 +494,47 @@ class ChattingServiceSupabase {
   }
 
   // 알림 소리 재생
+  static final AudioPlayer _audioPlayer = AudioPlayer();
+  static bool _audioPlayerInitialized = false;
+  
   static Future<void> playNotificationSound() async {
     print('🔔 [Chat] playNotificationSound 호출됨');
+    
     if (kIsWeb) {
-      // 웹 환경: 소리만 재생
-      try {
-        final audio = html.AudioElement();
-        audio.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAAU1wZWcgTGF5ZXIgMyBhdWRpbyBlbmNvZGVyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV';
-        audio.volume = 0.3;
-        audio.play().catchError((e) {
-          print('소리 재생 실패: $e');
-        });
-      } catch (e) {
-        print('알림 소리 재생 중 오류: $e');
+      // 웹 환경: 소리 재생은 웹 전용 파일에서 처리
+      // iOS/Android 빌드 오류를 방지하기 위해 여기서는 처리하지 않음
+      print('🔔 [Chat] 웹 환경에서는 소리 재생이 비활성화되어 있습니다.');
+      return;
+    }
+    
+    // 네이티브 환경: 진동 + MP3 소리
+    try {
+      // 진동
+      HapticFeedback.mediumImpact();
+      
+      // AudioPlayer 초기화 (한 번만)
+      if (!_audioPlayerInitialized) {
+        _audioPlayerInitialized = true;
+        print('🎵 [Chat] AudioPlayer 초기화 완료');
       }
-    } else {
-      // 네이티브 환경: 진동 + 소리
+      
+      // 이전 재생이 있으면 먼저 정지
       try {
-        HapticFeedback.mediumImpact();
+        await _audioPlayer.stop();
+        await Future.delayed(Duration(milliseconds: 50)); // 정지 대기
       } catch (e) {
-        print('❌ [Chat] 알림 재생 오류: $e');
+        // 정지 실패는 무시 (재생 중이 아닐 수도 있음)
       }
+      
+      // 볼륨 및 모드 설정
+      await _audioPlayer.setVolume(1.0); // 최대 볼륨
+      await _audioPlayer.setPlayerMode(PlayerMode.lowLatency); // 낮은 지연시간 모드
+      
+      // MP3 파일 재생
+      await _audioPlayer.play(AssetSource('sounds/hole_in.mp3'));
+      print('🔔 [Chat] AudioPlayer로 hole_in 소리 재생 (MP3, 볼륨: 1.0)');
+    } catch (e) {
+      print('❌ [Chat] 알림 재생 오류: $e');
     }
   }
 }

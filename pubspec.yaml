@@ -51,6 +51,9 @@ dependencies:
   # 알림 (진동은 HapticFeedback 사용)
   flutter_local_notifications: ^17.2.3
   
+  # 오디오 재생 (알림음용)
+  audioplayers: ^5.2.1
+  
   # Supabase (DB 마이그레이션)
   supabase_flutter: ^2.8.0
 
@@ -72,6 +75,7 @@ flutter:
   # Assets 설정
   assets:
     - assets/images/
+    - assets/sounds/
 
 # 앱 아이콘 설정
 flutter_launcher_icons:
