@@ -21,16 +21,75 @@ def find_android_device():
                     return device_id
     return None
 
-def find_ios_device():
-    """실행 중인 iOS 디바이스/시뮬레이터 찾기"""
+def find_ios_devices():
+    """실행 중인 iOS 디바이스/시뮬레이터 목록 찾기"""
     result = subprocess.run(['flutter', 'devices'], capture_output=True, text=True, cwd=PROJECT_DIR)
+    devices = []
     for line in result.stdout.split('\n'):
-        if ('ios' in line.lower() or 'iphone' in line.lower() or 'simulator' in line.lower()) and '•' in line:
+        if ('ios' in line.lower() or 'iphone' in line.lower()) and '•' in line:
             parts = line.split('•')
             if len(parts) >= 2:
                 device_id = parts[1].strip()
+                device_name = parts[0].strip() if len(parts) > 0 else ''
                 if device_id:
-                    return device_id
+                    is_simulator = 'simulator' in line.lower()
+                    devices.append((device_id, device_name, is_simulator))
+    return devices
+
+def select_ios_device():
+    """iOS 디바이스 선택 (실제 디바이스와 시뮬레이터 중 선택)"""
+    devices = find_ios_devices()
+    
+    if not devices:
+        return None
+    
+    if len(devices) == 1:
+        device_id, device_name, is_simulator = devices[0]
+        device_type = "시뮬레이터" if is_simulator else "실제 디바이스 ✅"
+        print(f"\n📱 iOS 디바이스 발견: {device_name} ({device_type})")
+        return device_id
+    
+    # 여러 디바이스가 있으면 선택
+    print("\n" + "="*50)
+    print("📱 iOS 디바이스 선택")
+    print("="*50)
+    
+    physical_devices = [(d, n, s) for d, n, s in devices if not s]
+    simulators = [(d, n, s) for d, n, s in devices if s]
+    
+    all_devices = physical_devices + simulators  # 실제 디바이스 먼저
+    
+    for i, (device_id, device_name, is_simulator) in enumerate(all_devices, 1):
+        device_type = "시뮬레이터" if is_simulator else "실제 디바이스 ✅ (푸시 알림 가능)"
+        print(f"{i}. {device_name} - {device_type}")
+    
+    print("="*50)
+    
+    while True:
+        try:
+            choice = input(f"\n선택하세요 (1-{len(all_devices)}): ").strip()
+            idx = int(choice) - 1
+            if 0 <= idx < len(all_devices):
+                selected = all_devices[idx]
+                print(f"\n✅ 선택됨: {selected[1]}")
+                return selected[0]
+        except ValueError:
+            pass
+        print(f"❌ 1-{len(all_devices)} 사이의 숫자를 입력하세요.")
+
+def find_ios_device():
+    """실행 중인 iOS 디바이스/시뮬레이터 찾기 (하위 호환성)"""
+    devices = find_ios_devices()
+    
+    # 실제 디바이스를 우선적으로 반환 (푸시 알림 테스트용)
+    for device_id, device_name, is_simulator in devices:
+        if not is_simulator:
+            return device_id
+    
+    # 실제 디바이스가 없으면 시뮬레이터 반환
+    for device_id, device_name, is_simulator in devices:
+        return device_id
+    
     return None
 
 def find_available_android_emulator():
@@ -151,12 +210,25 @@ if platform_choice == '1':
 
 elif platform_choice == '2':
     # iOS만 실행
-    device_id = find_ios_device()
+    devices = find_ios_devices()
     
-    if not device_id:
+    if not devices:
+        print("\n⚠️  iOS 푸시 알림 테스트는 실제 디바이스에서 권장됩니다.")
+        print("   실제 디바이스를 연결하거나 시뮬레이터를 시작합니다...")
         if not start_ios_simulator():
             sys.exit(1)
         device_id = find_ios_device()
+    elif len(devices) == 1:
+        device_id, device_name, is_simulator = devices[0]
+        device_type = "시뮬레이터" if is_simulator else "실제 디바이스"
+        print(f"\n📱 {device_name} ({device_type})")
+        if is_simulator:
+            print("⚠️  시뮬레이터에서는 백그라운드 푸시 알림이 작동하지 않습니다.")
+        else:
+            print("✅ 실제 디바이스 - 푸시 알림 테스트 가능!")
+    else:
+        # 여러 디바이스가 있으면 선택
+        device_id = select_ios_device()
     
     print(f"\n🚀 CRM Lite Pro 실행 중... (iOS 디바이스: {device_id})")
     subprocess.run(['flutter', 'run', '-d', device_id], cwd=PROJECT_DIR)

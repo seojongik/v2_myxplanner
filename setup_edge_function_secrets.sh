@@ -37,3 +37,5 @@ echo "1. Edge Functions > send-chat-notification > Settings > Secrets"
 echo "2. 각 환경 변수를 하나씩 추가"
 echo ""
 
+
+

@@ -30,7 +30,7 @@ class _NotificationSettingsAccountContentState extends State<NotificationSetting
   
   Future<void> _checkDeviceMode() async {
     try {
-      const platform = MethodChannel('com.example.reservation_system/notification');
+      const platform = MethodChannel('com.enabletech.autogolfcrm/notification');
       final mode = await platform.invokeMethod<String>('getRingerMode');
       setState(() {
         _deviceMode = mode ?? '알 수 없음';
@@ -48,7 +48,7 @@ class _NotificationSettingsAccountContentState extends State<NotificationSetting
   Future<void> _openNotificationSettings() async {
     try {
       // Android 시스템 알림 설정으로 이동
-      const platform = MethodChannel('com.example.reservation_system/notification');
+      const platform = MethodChannel('com.enabletech.autogolfcrm/notification');
       await platform.invokeMethod('openNotificationSettings');
     } catch (e) {
       print('❌ 알림 설정 열기 실패: $e');

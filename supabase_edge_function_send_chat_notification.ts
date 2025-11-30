@@ -74,17 +74,21 @@ Deno.serve(async (req) => {
     const chatRoom = chatRooms[0];
     
     if (sender_type === "member") {
-      // 회원이 보낸 메시지 - 관리자에게 알림 발송
-      console.log("🔔 [Edge Function] 회원 메시지 - 관리자에게 알림 발송");
+      // 회원이 보낸 메시지 - 관리자/프로/매니저에게 알림 발송
+      console.log("🔔 [Edge Function] 회원 메시지 - 관리자/프로/매니저에게 알림 발송");
       
-      // 관리자 FCM 토큰 조회 (is_admin=true 사용)
-      const adminTokensResponse = await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&is_admin=eq.true&select=token`, {
-        headers: {
-          "apikey": SUPABASE_SERVICE_ROLE_KEY,
-          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          "Content-Type": "application/json"
+      // 관리자/프로/매니저 FCM 토큰 조회 (sender_type 기준)
+      // sender_type이 'admin', 'pro', 'manager'인 토큰 모두 조회
+      const adminTokensResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&sender_type=in.(admin,pro,manager)&select=token`,
+        {
+          headers: {
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json"
+          }
         }
-      });
+      );
       
       if (!adminTokensResponse.ok) {
         console.error("❌ [Edge Function] 관리자 토큰 조회 실패:", await adminTokensResponse.text());
@@ -102,7 +106,31 @@ Deno.serve(async (req) => {
       const tokens = adminTokens.map((t) => t.token).filter(Boolean);
       
       if (tokens.length === 0) {
-        console.log("⚠️ [Edge Function] 관리자 토큰 없음");
+        console.log("⚠️ [Edge Function] 관리자/프로/매니저 토큰 없음 - 하위 호환성을 위해 is_admin=true로 재시도");
+        // 하위 호환성: sender_type이 없는 경우 is_admin=true로 재시도
+        const fallbackResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&is_admin=eq.true&select=token`,
+          {
+            headers: {
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        
+        if (fallbackResponse.ok) {
+          const fallbackTokens = await fallbackResponse.json();
+          const fallbackTokenList = fallbackTokens.map((t) => t.token).filter(Boolean);
+          if (fallbackTokenList.length > 0) {
+            tokens.push(...fallbackTokenList);
+            console.log(`✅ [Edge Function] 하위 호환성 모드: ${fallbackTokenList.length}개 토큰 발견`);
+          }
+        }
+      }
+      
+      if (tokens.length === 0) {
+        console.log("⚠️ [Edge Function] 관리자/프로/매니저 토큰 없음");
         return new Response(JSON.stringify({
           success: false,
           message: "토큰 없음"
@@ -152,7 +180,8 @@ Deno.serve(async (req) => {
               payload: {
                 aps: {
                   sound: "hole_in.mp3", // 커스텀 사운드
-                  badge: 1
+                  badge: 1,
+                  "content-available": 1 // iOS 백그라운드 푸시 알림 활성화
                 }
               }
             }
@@ -171,10 +200,17 @@ Deno.serve(async (req) => {
         if (!fcmResponse.ok) {
           const errorText = await fcmResponse.text();
           console.error(`❌ [Edge Function] FCM 발송 실패 (토큰: ${token.substring(0, 20)}...):`, errorText);
+          
+          // 토큰이 완전히 무효화된 경우에만 삭제 대상으로 표시
+          const isInvalidToken = errorText.includes("UNREGISTERED") || 
+                                 errorText.includes("INVALID_ARGUMENT") ||
+                                 errorText.includes("NOT_FOUND");
+          
           results.push({
             token,
             success: false,
-            error: errorText
+            error: errorText,
+            shouldDelete: isInvalidToken
           });
         } else {
           const result = await fcmResponse.json();
@@ -182,15 +218,16 @@ Deno.serve(async (req) => {
           results.push({
             token,
             success: true,
-            result
+            result,
+            shouldDelete: false
           });
         }
       }
       
-      // 실패한 토큰 정리
-      const failedTokens = results.filter((r) => !r.success).map((r) => r.token);
-      if (failedTokens.length > 0) {
-        for (const token of failedTokens) {
+      // 완전히 무효화된 토큰만 삭제 (일시적 실패는 삭제하지 않음)
+      const invalidTokens = results.filter((r) => r.shouldDelete === true).map((r) => r.token);
+      if (invalidTokens.length > 0) {
+        for (const token of invalidTokens) {
           await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?token=eq.${token}`, {
             method: "DELETE",
             headers: {
@@ -199,7 +236,7 @@ Deno.serve(async (req) => {
             }
           });
         }
-        console.log(`🗑️ [Edge Function] 유효하지 않은 토큰 삭제: ${failedTokens.length}`);
+        console.log(`🗑️ [Edge Function] 무효화된 토큰 삭제: ${invalidTokens.length}`);
       }
       
       return new Response(JSON.stringify({
@@ -231,28 +268,43 @@ Deno.serve(async (req) => {
         });
       }
       
-      // 회원 FCM 토큰 조회 (member_id와 is_admin=false 사용)
-      const memberTokensResponse = await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&member_id=eq.${memberId}&is_admin=eq.false&select=token`, {
-        headers: {
-          "apikey": SUPABASE_SERVICE_ROLE_KEY,
-          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          "Content-Type": "application/json"
-        }
-      });
-      
-      if (!memberTokensResponse.ok) {
-        console.error("❌ [Edge Function] 회원 토큰 조회 실패:", await memberTokensResponse.text());
-        return new Response(JSON.stringify({
-          error: "토큰 조회 실패"
-        }), {
-          status: 500,
+      // 회원 FCM 토큰 조회 (sender_type='member' 기준)
+      let memberTokensResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&member_id=eq.${memberId}&sender_type=eq.member&select=token`,
+        {
           headers: {
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             "Content-Type": "application/json"
           }
-        });
+        }
+      );
+      
+      let memberTokens = [];
+      if (memberTokensResponse.ok) {
+        memberTokens = await memberTokensResponse.json();
       }
       
-      const memberTokens = await memberTokensResponse.json();
+      // 하위 호환성: sender_type이 없는 경우 is_admin=false로 재시도
+      if (!memberTokens || memberTokens.length === 0) {
+        console.log("⚠️ [Edge Function] sender_type='member' 토큰 없음 - 하위 호환성을 위해 is_admin=false로 재시도");
+        const fallbackResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&member_id=eq.${memberId}&is_admin=eq.false&select=token`,
+          {
+            headers: {
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        
+        if (fallbackResponse.ok) {
+          memberTokens = await fallbackResponse.json();
+          console.log(`✅ [Edge Function] 하위 호환성 모드: ${memberTokens.length}개 회원 토큰 발견`);
+        }
+      }
+      
       if (!memberTokens || memberTokens.length === 0) {
         console.log("⚠️ [Edge Function] 회원 토큰 없음");
         return new Response(JSON.stringify({
@@ -315,7 +367,8 @@ Deno.serve(async (req) => {
             payload: {
               aps: {
                 sound: "hole_in.mp3", // 커스텀 사운드
-                badge: 1
+                badge: 1,
+                "content-available": 1 // iOS 백그라운드 푸시 알림 활성화
               }
             }
           }
@@ -335,14 +388,21 @@ Deno.serve(async (req) => {
         const errorText = await fcmResponse.text();
         console.error("❌ [Edge Function] FCM 발송 실패:", errorText);
         
-        // 실패한 토큰 삭제
-        await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&member_id=eq.${memberId}&is_admin=eq.false`, {
-          method: "DELETE",
-          headers: {
-            "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-          }
-        });
+        // 토큰이 완전히 무효화된 경우에만 삭제
+        const isInvalidToken = errorText.includes("UNREGISTERED") || 
+                               errorText.includes("INVALID_ARGUMENT") ||
+                               errorText.includes("NOT_FOUND");
+        
+        if (isInvalidToken) {
+          await fetch(`${SUPABASE_URL}/rest/v1/fcm_tokens?branch_id=eq.${branch_id}&member_id=eq.${memberId}&sender_type=eq.member`, {
+            method: "DELETE",
+            headers: {
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            }
+          });
+          console.log(`🗑️ [Edge Function] 무효화된 회원 토큰 삭제`);
+        }
         
         return new Response(JSON.stringify({
           error: "FCM 발송 실패",

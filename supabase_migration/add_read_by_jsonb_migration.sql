@@ -52,3 +52,5 @@ WHERE (read_by->>'manager')::boolean = false;
 -- 4. 코멘트 추가
 COMMENT ON COLUMN chat_messages.read_by IS '각 sender_type별 읽음 상태를 저장하는 JSONB 필드. 예: {"member": true, "pro": false, "manager": false, "admin": true}';
 
+
+

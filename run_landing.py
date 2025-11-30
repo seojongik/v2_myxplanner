@@ -9,3 +9,5 @@ PROJECT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'landing'
 print("🚀 Landing 실행 중...")
 subprocess.run(['npm', 'run', 'dev'], cwd=PROJECT_DIR)
 
+
+

@@ -125,3 +125,5 @@ echo "   2. 에러 발생 시 즉시 대응"
 echo "   3. Database Webhooks 전환 검토 (운영 관점)"
 echo ""
 
+
+

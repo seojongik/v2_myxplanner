@@ -1,4 +1,4 @@
-package com.example.reservation_system
+package com.enabletech.autogolfcrm
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -20,9 +20,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.example.reservation_system/intent_launcher"
-    private val VIBRATION_CHANNEL = "com.example.reservation_system/vibration"
-    private val NOTIFICATION_CHANNEL = "com.example.reservation_system/notification"
+    private val CHANNEL = "com.enabletech.autogolfcrm/intent_launcher"
+    private val VIBRATION_CHANNEL = "com.enabletech.autogolfcrm/vibration"
+    private val NOTIFICATION_CHANNEL = "com.enabletech.autogolfcrm/notification"
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         // Firebase 플러그인이 먼저 등록되도록 super 호출
@@ -656,3 +656,5 @@ class MainActivity : FlutterActivity() {
         }
     }
 }
+
+

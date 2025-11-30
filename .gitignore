@@ -28,3 +28,5 @@ Thumbs.db
 *.temp
 
 .env.local.json
+# Firebase Service Account (비밀 키)
+firebase-service-account.json

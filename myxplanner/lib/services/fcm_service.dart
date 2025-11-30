@@ -319,6 +319,7 @@ class FCMService {
           'branch_id': branchId,
           'member_id': adminId,
           'is_admin': true,
+          'sender_type': 'admin', // sender_type 추가
           'token': token,
           'platform': kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.android ? 'android' : 'ios'),
           'updated_at': DateTime.now().toIso8601String(),
@@ -333,13 +334,14 @@ class FCMService {
           return;
         }
         
-        final tokenId = '${branchId}_$memberId';
+        final tokenId = '${branchId}_member_$memberId';
         
         await supabase.from('fcm_tokens').upsert({
           'id': tokenId,
           'branch_id': branchId,
           'member_id': memberId,
           'is_admin': false,
+          'sender_type': 'member', // sender_type 추가
           'token': token,
           'platform': kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.android ? 'android' : 'ios'),
           'updated_at': DateTime.now().toIso8601String(),
@@ -362,13 +364,25 @@ class FCMService {
     try {
       final branchId = ApiService.getCurrentBranchId();
       final currentUser = ApiService.getCurrentUser();
-      final memberId = currentUser?['member_id']?.toString();
+      final isAdmin = ApiService.isAdminLogin();
       
-      if (branchId != null && memberId != null) {
+      if (branchId != null) {
         final supabase = SupabaseAdapter.client;
-        final tokenId = '${branchId}_$memberId';
         
-        await supabase.from('fcm_tokens').delete().eq('id', tokenId);
+        if (isAdmin) {
+          // 관리자 토큰 삭제
+          final adminId = currentUser?['member_id']?.toString() ?? 'admin';
+          final tokenId = '${branchId}_admin_$adminId';
+          await supabase.from('fcm_tokens').delete().eq('id', tokenId);
+        } else {
+          // 회원 토큰 삭제
+          final memberId = currentUser?['member_id']?.toString();
+          if (memberId != null) {
+            final tokenId = '${branchId}_member_$memberId';
+            await supabase.from('fcm_tokens').delete().eq('id', tokenId);
+          }
+        }
+        
         print('✅ [FCM] FCM 토큰 Supabase 삭제 완료');
       }
       

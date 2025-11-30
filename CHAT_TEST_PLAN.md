@@ -11,6 +11,14 @@
    - iOS 앱: `1:101436238734:ios:e2e727d584fd95b0ff92df`
    - Web 앱: `1:101436238734:web:3a082e5d671e4d39ff92df`
 
+2. **Apple APNs 인증 키 (iOS 푸시 알림용)**
+   - Key Name: `AutoGolfCRM`
+   - Key ID: `S3KA5B7T68`
+   - Team ID: `JXM6K725Y2`
+   - .p8 파일: `AuthKey_S3KA5B7T68.p8`
+   - 등록일: 2025-11-30
+   - ⚠️ Firebase Console에 업로드 필요 (프로젝트 설정 → Cloud Messaging → iOS 앱)
+
 2. **Supabase 테이블**
    - `chat_rooms` - 채팅방 정보
    - `chat_messages` - 메시지 데이터
@@ -430,4 +438,6 @@ SELECT * FROM pg_trigger WHERE tgname = 'on_chat_message_created';
 **작성일:** 2025년 1월  
 **버전:** 1.0  
 **상태:** 테스트 준비 완료
+
+
 
