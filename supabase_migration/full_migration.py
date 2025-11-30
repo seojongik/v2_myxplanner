@@ -141,6 +141,22 @@ def get_table_structure(cursor, table_name: str) -> Dict[str, Any]:
     create_table_result = cursor.fetchone()
     create_statement = create_table_result[1] if create_table_result else None
     
+    # Check constraint 정보 추출 (CREATE TABLE 문에서)
+    check_constraints = []
+    if create_statement:
+        # CHECK 제약 조건 찾기 (정규식 사용)
+        check_pattern = r'CHECK\s*\(([^)]+)\)'
+        matches = re.finditer(check_pattern, create_statement, re.IGNORECASE)
+        for match in matches:
+            constraint_expr = match.group(1)
+            # 제약 조건 이름 추출 시도 (CONSTRAINT name CHECK ...)
+            constraint_name_match = re.search(r'CONSTRAINT\s+(\w+)\s+CHECK', create_statement[:match.start()], re.IGNORECASE)
+            constraint_name = constraint_name_match.group(1) if constraint_name_match else None
+            check_constraints.append({
+                'name': constraint_name,
+                'expression': constraint_expr
+            })
+    
     # 인덱스 정보 가져오기
     cursor.execute(f"SHOW INDEX FROM `{table_name}`")
     indexes = cursor.fetchall()
@@ -167,6 +183,7 @@ def get_table_structure(cursor, table_name: str) -> Dict[str, Any]:
         'columns': column_info,
         'create_statement': create_statement,
         'indexes': index_info,
+        'check_constraints': check_constraints,
         'backup_timestamp': datetime.now().isoformat()
     }
 
@@ -435,6 +452,7 @@ def generate_postgresql_create_table(schema: Dict[str, Any]) -> tuple:
     """백업된 스키마를 기반으로 PostgreSQL CREATE TABLE 문 생성"""
     table_name = schema['table_name']
     columns = schema['columns']
+    check_constraints = schema.get('check_constraints', [])
     
     pg_table_name = table_name.lower()
     
@@ -476,6 +494,25 @@ def generate_postgresql_create_table(schema: Dict[str, Any]) -> tuple:
     
     if primary_keys:
         create_sql += f',\n  PRIMARY KEY ({", ".join(primary_keys)})\n'
+    
+    # Check constraint 처리
+    for constraint in check_constraints:
+        constraint_expr = constraint['expression']
+        constraint_name = constraint.get('name')
+        
+        # chat_messages 테이블의 sender_type check constraint 수정
+        if pg_table_name == 'chat_messages' and 'sender_type' in constraint_expr.lower():
+            # sender_type check constraint를 pro, manager 포함하도록 수정
+            # MySQL: sender_type IN ('member', 'admin')
+            # PostgreSQL: sender_type IN ('member', 'admin', 'pro', 'manager')
+            constraint_expr = "sender_type IN ('member', 'admin', 'pro', 'manager')"
+            constraint_name = 'chat_messages_sender_type_check'
+        
+        # PostgreSQL CHECK 제약 조건 추가
+        if constraint_name:
+            create_sql += f',\n  CONSTRAINT {constraint_name} CHECK ({constraint_expr})\n'
+        else:
+            create_sql += f',\n  CHECK ({constraint_expr})\n'
     
     create_sql += ');'
     
