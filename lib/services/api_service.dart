@@ -216,6 +216,7 @@ class ApiService {
     List<Map<String, dynamic>>? orderBy,
     int? limit,
     int? offset,
+    bool includeSensitiveFields = false, // 로그인 시 비밀번호 필드 포함용
   }) async {
     _ensureSupabaseEnabled();
 
@@ -232,6 +233,7 @@ class ApiService {
       orderBy: orderBy,
       limit: limit,
       offset: offset,
+      includeSensitiveFields: includeSensitiveFields,
     );
   }
 
@@ -891,13 +893,14 @@ class ApiService {
       print('비밀번호: $password');
       print('비밀번호 길이: ${password.length}');
       
-      // 먼저 전화번호로 회원 조회
+      // 먼저 전화번호로 회원 조회 (로그인 시 비밀번호 필드 포함 필요)
       print('📞 전화번호로 회원 조회 중...');
       final allMembers = await getData(
         table: 'v3_members',
         where: [
           {'field': 'member_phone', 'operator': '=', 'value': phone},
         ],
+        includeSensitiveFields: true, // 로그인 시 비밀번호 필드 포함
       );
       
       print('📊 전화번호 조회 결과: ${allMembers.length}명');

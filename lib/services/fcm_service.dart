@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'chatting/chatting_service.dart';
+import 'supabase_adapter.dart';
 import 'api_service.dart';
 import 'notification_settings_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -134,7 +135,7 @@ class FCMService {
       // 토큰 갱신 리스너
       _messaging!.onTokenRefresh.listen((newToken) {
         print('🔔 [FCM] 토큰 갱신: $newToken');
-        _updateTokenInFirestore(newToken);
+        _updateTokenInSupabase(newToken);
       });
       
       print('✅ [FCM] FCM 서비스 초기화 완료');
@@ -285,7 +286,7 @@ class FCMService {
       if (token != null) {
         _currentToken = token;
         print('✅ [FCM] FCM 토큰 가져오기 성공: ${token.substring(0, 20)}...');
-        await _updateTokenInFirestore(token);
+        await _updateTokenInSupabase(token);
       } else {
         print('⚠️ [FCM] FCM 토큰이 null입니다');
       }
@@ -294,8 +295,8 @@ class FCMService {
     }
   }
   
-  // Firestore에 토큰 저장
-  static Future<void> _updateTokenInFirestore(String token) async {
+  // Supabase에 토큰 저장
+  static Future<void> _updateTokenInSupabase(String token) async {
     try {
       final branchId = ApiService.getCurrentBranchId();
       final currentUser = ApiService.getCurrentUser();
@@ -306,28 +307,24 @@ class FCMService {
         return;
       }
       
-      final firestore = ChattingService.firestore;
-      if (firestore == null) {
-        print('❌ [FCM] Firestore 인스턴스 없음');
-        return;
-      }
+      final supabase = SupabaseAdapter.client;
       
       if (isAdmin) {
         // 관리자 토큰 저장
         final adminId = currentUser?['member_id']?.toString() ?? 'admin';
-        await firestore
-            .collection('fcmTokens')
-            .doc('${branchId}_$adminId')
-            .set({
-          'token': token,
-          'branchId': branchId,
-          'memberId': adminId,
-          'isAdmin': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'platform': kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.android ? 'android' : 'ios'),
-        }, SetOptions(merge: true));
+        final tokenId = '${branchId}_admin_$adminId';
         
-        print('✅ [FCM] 관리자 FCM 토큰 Firestore 저장 완료');
+        await supabase.from('fcm_tokens').upsert({
+          'id': tokenId,
+          'branch_id': branchId,
+          'member_id': adminId,
+          'is_admin': true,
+          'token': token,
+          'platform': kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.android ? 'android' : 'ios'),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+        
+        print('✅ [FCM] 관리자 FCM 토큰 Supabase 저장 완료');
       } else {
         // 회원 토큰 저장
         final memberId = currentUser?['member_id']?.toString();
@@ -336,22 +333,22 @@ class FCMService {
           return;
         }
         
-        await firestore
-            .collection('fcmTokens')
-            .doc('${branchId}_$memberId')
-            .set({
-          'token': token,
-          'branchId': branchId,
-          'memberId': memberId,
-          'isAdmin': false,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'platform': kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.android ? 'android' : 'ios'),
-        }, SetOptions(merge: true));
+        final tokenId = '${branchId}_$memberId';
         
-        print('✅ [FCM] 회원 FCM 토큰 Firestore 저장 완료');
+        await supabase.from('fcm_tokens').upsert({
+          'id': tokenId,
+          'branch_id': branchId,
+          'member_id': memberId,
+          'is_admin': false,
+          'token': token,
+          'platform': kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.android ? 'android' : 'ios'),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+        
+        print('✅ [FCM] 회원 FCM 토큰 Supabase 저장 완료');
       }
     } catch (e) {
-      print('❌ [FCM] FCM 토큰 Firestore 저장 실패: $e');
+      print('❌ [FCM] FCM 토큰 Supabase 저장 실패: $e');
     }
   }
   
@@ -368,14 +365,11 @@ class FCMService {
       final memberId = currentUser?['member_id']?.toString();
       
       if (branchId != null && memberId != null) {
-        final firestore = ChattingService.firestore;
-        if (firestore != null) {
-          await firestore
-              .collection('fcmTokens')
-              .doc('${branchId}_$memberId')
-              .delete();
-          print('✅ [FCM] FCM 토큰 Firestore 삭제 완료');
-        }
+        final supabase = SupabaseAdapter.client;
+        final tokenId = '${branchId}_$memberId';
+        
+        await supabase.from('fcm_tokens').delete().eq('id', tokenId);
+        print('✅ [FCM] FCM 토큰 Supabase 삭제 완료');
       }
       
       await _messaging?.deleteToken();

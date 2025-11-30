@@ -41,39 +41,39 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAwsGmHtSWW9LdaO8R0I6wftQPkHtnUy94',
-    appId: '1:224974438083:web:5dfe79140a6fe10cfcec76',
-    messagingSenderId: '224974438083',
-    projectId: 'mgpfunctions',
-    authDomain: 'mgpfunctions.firebaseapp.com',
-    storageBucket: 'mgpfunctions.firebasestorage.app',
-    measurementId: 'G-0S32LNP1EL',
+    apiKey: 'AIzaSyAkuYPyMcgTJ4FBl8wJ4-ZctIshxAz505M',
+    appId: '1:101436238734:web:3a082e5d671e4d39ff92df',
+    messagingSenderId: '101436238734',
+    projectId: 'autogolfcrm-messaging',
+    authDomain: 'autogolfcrm-messaging.firebaseapp.com',
+    storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
+    measurementId: 'G-LJEKXS1EP9',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCP9L4ngwK0iiOINxXxyunSoG0xpboK8rs',
-    appId: '1:224974438083:android:3e69715c0dd1f054fcec76',
-    messagingSenderId: '224974438083',
-    projectId: 'mgpfunctions',
-    storageBucket: 'mgpfunctions.firebasestorage.app',
+    apiKey: 'AIzaSyB88lKjes3zXeszyUjll85-0YJorZ_Atzk',
+    appId: '1:101436238734:android:79880c733be09b34ff92df',
+    messagingSenderId: '101436238734',
+    projectId: 'autogolfcrm-messaging',
+    storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCkwOPXKAdktsnDnLHRjjvyyh8m8BDQwA4',
-    appId: '1:224974438083:ios:3b4c22e92a6d0039fcec76',
-    messagingSenderId: '224974438083',
-    projectId: 'mgpfunctions',
-    storageBucket: 'mgpfunctions.firebasestorage.app',
-    iosBundleId: 'mygolfplanner.app',
+    apiKey: 'AIzaSyDEOYkNI_tV7WoLvs2zhUkiL6oNYDgXxnY',
+    appId: '1:101436238734:ios:e2e727d584fd95b0ff92df',
+    messagingSenderId: '101436238734',
+    projectId: 'autogolfcrm-messaging',
+    storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
+    iosBundleId: 'com.enabletech.autogolfcrm',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCkwOPXKAdktsnDnLHRjjvyyh8m8BDQwA4',
-    appId: '1:224974438083:ios:3b4c22e92a6d0039fcec76',
-    messagingSenderId: '224974438083',
-    projectId: 'mgpfunctions',
-    storageBucket: 'mgpfunctions.firebasestorage.app',
-    iosBundleId: 'mygolfplanner.app',
+    apiKey: 'AIzaSyDEOYkNI_tV7WoLvs2zhUkiL6oNYDgXxnY',
+    appId: '1:101436238734:ios:e2e727d584fd95b0ff92df',
+    messagingSenderId: '101436238734',
+    projectId: 'autogolfcrm-messaging',
+    storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
+    iosBundleId: 'com.enabletech.autogolfcrm',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

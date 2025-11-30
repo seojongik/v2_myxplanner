@@ -67,9 +67,12 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
           final currentMemberId = currentUser?['member_id']?.toString();
           final isAdmin = ApiService.isAdminLogin();
           
+          // 타입 명시
+          final List<ChatMessage> messageList = messages;
+          
           // 새로운 메시지가 있고, 이전 메시지가 있었던 경우만 알림 재생
-          if (messages.length > previousMessageCount && previousMessageCount > 0) {
-            final newMessages = messages.skip(previousMessageCount).toList();
+          if (messageList.length > previousMessageCount && previousMessageCount > 0) {
+            final newMessages = messageList.skip(previousMessageCount).toList();
             
             // 회원인 경우: 관리자가 보낸 새 메시지만 알림 재생
             // 관리자인 경우: 회원이 보낸 새 메시지만 알림 재생
@@ -127,10 +130,10 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
             }
           }
           
-          previousMessageCount = messages.length;
+          previousMessageCount = messageList.length;
           
           // 새로운 관리자 메시지가 있으면 자동으로 읽음 처리
-          final unreadAdminMessages = messages.where((msg) => 
+          final unreadAdminMessages = messageList.where((msg) => 
             msg.senderType == 'admin' && !msg.isRead
           ).toList();
           
@@ -430,7 +433,10 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
                         ),
                         maxLines: 5,
                         minLines: 1,
-                        style: TextStyle(fontSize: 15),
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.black,
+                        ),
                         textInputAction: TextInputAction.newline,
                         onSubmitted: (value) {
                           if (value.trim().isNotEmpty) {
@@ -541,6 +547,30 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
   Widget _buildMessageItem(ChatMessage message, String branchName) {
     final isMyMessage = message.senderType == 'member';
     
+    // 상대방 메시지일 때 발신자 라벨 생성
+    String? senderLabel;
+    if (!isMyMessage) {
+      switch (message.senderType) {
+        case 'admin':
+          senderLabel = '관리자';
+          break;
+        case 'manager':
+          senderLabel = '매니저';
+          break;
+        case 'pro':
+          // 프로는 이름 + " 프로" 형식
+          final proName = message.senderName.isNotEmpty 
+              ? message.senderName 
+              : '프로';
+          senderLabel = '$proName 프로';
+          break;
+        default:
+          // 기본값: 지점명 (기존 동작 유지)
+          senderLabel = branchName;
+          break;
+      }
+    }
+    
     return Container(
       margin: EdgeInsets.only(bottom: 8),
       child: Row(
@@ -550,11 +580,12 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMyMessage) ...[
+            // sender_type별 아이콘 및 색상
             CircleAvatar(
               radius: 16,
-              backgroundColor: Colors.green[600],
+              backgroundColor: _getAvatarColor(message.senderType),
               child: Icon(
-                Icons.golf_course,
+                _getAvatarIcon(message.senderType),
                 size: 18,
                 color: Colors.white,
               ),
@@ -567,11 +598,11 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
                   ? CrossAxisAlignment.end 
                   : CrossAxisAlignment.start,
               children: [
-                if (!isMyMessage) ...[
+                if (!isMyMessage && senderLabel != null) ...[
                   Padding(
                     padding: EdgeInsets.only(left: 8, bottom: 2),
                     child: Text(
-                      branchName,
+                      senderLabel,
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.black54,
@@ -640,5 +671,35 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
 
   String _formatTimeSimple(DateTime timestamp) {
     return '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
+  }
+
+  // sender_type별 아바타 아이콘 가져오기
+  IconData _getAvatarIcon(String senderType) {
+    switch (senderType) {
+      case 'admin':
+        return Icons.golf_course; // 골프 홀 아이콘
+      case 'manager':
+        return Icons.supervisor_account;
+      case 'pro':
+        return Icons.school; // 레슨 아이콘
+      case 'member':
+      default:
+        return Icons.account_circle;
+    }
+  }
+
+  // sender_type별 아바타 배경색 가져오기
+  Color _getAvatarColor(String senderType) {
+    switch (senderType) {
+      case 'admin':
+        return Color(0xFF3B82F6); // 파란색
+      case 'manager':
+        return Color(0xFF8B5CF6); // 보라색
+      case 'pro':
+        return Color(0xFF10B981); // 초록색
+      case 'member':
+      default:
+        return Color(0xFF64748B); // 회색
+    }
   }
 }

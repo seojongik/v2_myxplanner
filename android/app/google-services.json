@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "224974438083",
-    "project_id": "mgpfunctions",
-    "storage_bucket": "mgpfunctions.firebasestorage.app"
+    "project_number": "101436238734",
+    "project_id": "autogolfcrm-messaging",
+    "storage_bucket": "autogolfcrm-messaging.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:224974438083:android:3e69715c0dd1f054fcec76",
+        "mobilesdk_app_id": "1:101436238734:android:79880c733be09b34ff92df",
         "android_client_info": {
-          "package_name": "mygolfplanner.app"
+          "package_name": "com.enabletech.autogolfcrm"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCP9L4ngwK0iiOINxXxyunSoG0xpboK8rs"
+          "current_key": "AIzaSyB88lKjes3zXeszyUjll85-0YJorZ_Atzk"
         }
       ],
       "services": {

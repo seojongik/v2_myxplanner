@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyCkwOPXKAdktsnDnLHRjjvyyh8m8BDQwA4</string>
+	<string>AIzaSyDEOYkNI_tV7WoLvs2zhUkiL6oNYDgXxnY</string>
 	<key>GCM_SENDER_ID</key>
-	<string>224974438083</string>
+	<string>101436238734</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>mygolfplanner.app</string>
+	<string>com.enabletech.autogolfcrm</string>
 	<key>PROJECT_ID</key>
-	<string>mgpfunctions</string>
+	<string>autogolfcrm-messaging</string>
 	<key>STORAGE_BUCKET</key>
-	<string>mgpfunctions.firebasestorage.app</string>
+	<string>autogolfcrm-messaging.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:224974438083:ios:3b4c22e92a6d0039fcec76</string>
+	<string>1:101436238734:ios:e2e727d584fd95b0ff92df</string>
 </dict>
 </plist>
