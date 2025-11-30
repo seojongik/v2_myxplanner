@@ -75,17 +75,18 @@ def get_subproject_changes(root):
     return changed
 
 def run_subproject_push(root, proj, commit_message):
-    """서브프로젝트 push 스크립트 실행"""
+    """서브프로젝트 push 스크립트 실행 (자동 확인)"""
     script_path = root / proj['script']
     print_step(f"{proj['name']} push 실행 중...")
 
     try:
-        # 스크립트를 커밋 메시지와 함께 실행
+        # 스크립트를 커밋 메시지와 함께 실행, 'y'를 자동 입력
         result = subprocess.run(
             ['python3', str(script_path), commit_message],
             cwd=root,
             check=False,
-            text=True
+            text=True,
+            input='y\n'  # push 확인에 자동으로 'y' 응답
         )
         if result.returncode == 0:
             print_success(f"{proj['name']} push 완료")
