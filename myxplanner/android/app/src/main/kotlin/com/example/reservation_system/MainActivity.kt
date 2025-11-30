@@ -535,6 +535,13 @@ class MainActivity : FlutterActivity() {
                 vibrationPattern = longArrayOf(0, 200, 300, 200)
                 enableLights(true)
                 setShowBadge(true)
+                // 커스텀 사운드 설정
+                val soundUri = Uri.parse("android.resource://${packageName}/raw/hole_in")
+                val audioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+                setSound(soundUri, audioAttributes)
             }
             
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

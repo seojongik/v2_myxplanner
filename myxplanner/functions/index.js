@@ -96,14 +96,14 @@ exports.sendChatNotification = functions.firestore
             priority: 'high',
             notification: {
               channelId: 'chat_notifications',
-              sound: 'default',
+              sound: 'hole_in',
               priority: 'high',
             },
           },
           apns: {
             payload: {
               aps: {
-                sound: 'default',
+                sound: 'hole_in.mp3',
                 badge: 1,
               },
             },
@@ -219,14 +219,14 @@ exports.sendChatNotification = functions.firestore
             priority: 'high',
             notification: {
               channelId: 'chat_notifications',
-              sound: 'default',
+              sound: 'hole_in',
               priority: 'high',
             },
           },
           apns: {
             payload: {
               aps: {
-                sound: 'default',
+                sound: 'hole_in.mp3',
                 badge: 1,
               },
             },
