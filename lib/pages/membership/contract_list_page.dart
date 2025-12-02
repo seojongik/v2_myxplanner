@@ -47,7 +47,7 @@ class _ContractListPageContentState extends State<ContractListPageContent> {
 
       print('계약 목록 로드 시작 - 회원권 유형: ${widget.membershipType}');
 
-      // v2_contracts 테이블에서 현재 지점의 유효한 회원권 계약 조회
+      // v2_contracts 테이블에서 현재 지점의 유효한 회원권 계약 조회 (금액이 0원 이상인 것만)
       final data = await ApiService.getData(
         table: 'v2_contracts',
         where: [
@@ -55,6 +55,7 @@ class _ContractListPageContentState extends State<ContractListPageContent> {
           {'field': 'contract_status', 'operator': '=', 'value': '유효'},
           {'field': 'contract_type', 'operator': '=', 'value': widget.membershipType},
           {'field': 'branch_id', 'operator': '=', 'value': ApiService.getCurrentBranchId()},
+          {'field': 'price', 'operator': '>', 'value': 0},
         ],
         orderBy: [
           {'field': 'contract_id', 'direction': 'ASC'}

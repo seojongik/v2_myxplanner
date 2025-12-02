@@ -86,12 +86,13 @@ class _MembershipPageState extends State<MembershipPage> {
 
       print('회원권 유형 로드 시작 - v2_contracts 테이블에서 contract_type 조회');
 
-      // v2_contracts 테이블에서 회원권 카테고리의 유효한 계약 조회
+      // v2_contracts 테이블에서 회원권 카테고리의 유효한 계약 조회 (금액이 0원 이상인 것만)
       final data = await ApiService.getData(
         table: 'v2_contracts',
         where: [
           {'field': 'contract_category', 'operator': '=', 'value': '회원권'},
           {'field': 'contract_status', 'operator': '=', 'value': '유효'},
+          {'field': 'price', 'operator': '>', 'value': 0},
         ],
       );
 
