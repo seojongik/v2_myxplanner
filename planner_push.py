@@ -75,19 +75,41 @@ def main():
     if not status_output:
         print_warning(f"{FOLDER_PREFIX}/ 폴더에 변경사항이 없습니다.")
 
-        # 이미 커밋된 것이 있는지 확인하고 subtree push만 할지 물어봄
-        response = input(f"{Colors.YELLOW}기존 커밋을 subtree push 하시겠습니까? (y/N): {Colors.RESET}").lower()
-        if response == 'y':
-            ensure_remote(project_root)
-            print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
-            try:
-                run_command(
-                    ['git', 'subtree', 'push', '--prefix', FOLDER_PREFIX, REMOTE_NAME, BRANCH],
-                    cwd=project_root
-                )
-                print_success("Subtree push 완료!")
-            except:
-                print_error("Subtree push 실패. 먼저 모노레포에 커밋이 필요할 수 있습니다.")
+        # 이미 커밋된 것이 있는지 확인
+        recent_commits, _ = run_command(
+            ['git', 'log', '--oneline', '-1', '--', f'{FOLDER_PREFIX}/'],
+            cwd=project_root, check=False
+        )
+        
+        if recent_commits:
+            print_success(f"최근 커밋 발견: {recent_commits}")
+            # 비대화형 모드: 자동으로 push
+            if len(sys.argv) > 1 and sys.argv[1] == '--auto':
+                ensure_remote(project_root)
+                print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
+                try:
+                    run_command(
+                        ['git', 'subtree', 'push', '--prefix', FOLDER_PREFIX, REMOTE_NAME, BRANCH],
+                        cwd=project_root
+                    )
+                    print_success("Subtree push 완료!")
+                except:
+                    print_error("Subtree push 실패. 먼저 모노레포에 커밋이 필요할 수 있습니다.")
+                sys.exit(0)
+            else:
+                # 대화형 모드: 사용자에게 물어봄
+                response = input(f"{Colors.YELLOW}기존 커밋을 subtree push 하시겠습니까? (y/N): {Colors.RESET}").lower()
+                if response == 'y':
+                    ensure_remote(project_root)
+                    print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
+                    try:
+                        run_command(
+                            ['git', 'subtree', 'push', '--prefix', FOLDER_PREFIX, REMOTE_NAME, BRANCH],
+                            cwd=project_root
+                        )
+                        print_success("Subtree push 완료!")
+                    except:
+                        print_error("Subtree push 실패. 먼저 모노레포에 커밋이 필요할 수 있습니다.")
         sys.exit(0)
 
     print_success("변경사항 발견:")
