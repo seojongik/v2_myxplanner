@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'login_branch_select.dart';
 import 'main_page.dart';
 import 'services/api_service.dart';
 import 'services/login_storage_service.dart';
+import 'services/fcm_service.dart';
 import 'admin_branch_select.dart';
 
 class LoginPage extends StatefulWidget {
@@ -336,6 +337,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         
         ApiService.setCurrentUser(matchingMember);
         ApiService.setCurrentBranch(branchId, branchData);
+        
+        // FCM 토큰 저장 (지점 정보가 설정된 후)
+        if (!kIsWeb) {
+          print('🔔 FCM 토큰 저장 시작...');
+          await FCMService.updateTokenAfterLogin();
+        }
         
         Navigator.pushReplacement(
           context,
