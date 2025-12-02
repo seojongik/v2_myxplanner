@@ -69,6 +69,7 @@ class _BoardListPageState extends State<BoardListPage> with TickerProviderStateM
       final boards = await BoardService.getBoardList(
         branchId: widget.branchId!,
         boardType: _currentBoardType,
+        limit: 4, // 게시글 4개만 표시
       );
 
       setState(() {

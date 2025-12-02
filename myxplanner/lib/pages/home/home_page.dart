@@ -27,9 +27,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   List<BoardModel> _recentBoards = [];
   bool _isBoardLoading = false;
   String _currentBoardType = '';
-  int _currentPage = 1;
-  bool _hasMorePages = true;
-  static const int _itemsPerPage = 6;
+  
+  // 각 게시판 타입별 페이지 상태 관리
+  final Map<String, int> _pageByBoardType = {};
+  final Map<String, bool> _hasMorePagesByBoardType = {};
+  
+  static const int _itemsPerPage = 4;
+  
+  // 현재 페이지와 다음 페이지 여부 getter
+  int get _currentPage => _pageByBoardType[_currentBoardType] ?? 1;
+  bool get _hasMorePages => _hasMorePagesByBoardType[_currentBoardType] ?? true;
 
   final List<Map<String, dynamic>> _tabs = [
     {'title': '공지사항', 'icon': Icons.campaign, 'type': '공지사항'},
@@ -44,6 +51,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_onTabChanged);
     _currentBoardType = _tabs[0]['type']; // 첫 번째 탭으로 초기화
+    // 첫 번째 탭의 페이지 상태 초기화
+    _pageByBoardType[_currentBoardType] = 1;
+    _hasMorePagesByBoardType[_currentBoardType] = true;
     _loadRecentBoards();
   }
 
@@ -58,9 +68,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (_tabController.indexIsChanging) return;
 
     final selectedTab = _tabs[_tabController.index];
+    final newBoardType = selectedTab['type'] ?? '';
+    
     setState(() {
-      _currentBoardType = selectedTab['type'] ?? '';
-      _currentPage = 1; // 탭 변경 시 페이지 리셋
+      _currentBoardType = newBoardType;
+      // 해당 게시판 타입의 페이지가 없으면 1로 초기화
+      if (!_pageByBoardType.containsKey(newBoardType)) {
+        _pageByBoardType[newBoardType] = 1;
+        _hasMorePagesByBoardType[newBoardType] = true;
+      }
     });
     _loadRecentBoards();
   }
@@ -82,7 +98,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
       setState(() {
         _recentBoards = boards;
-        _hasMorePages = boards.length >= _itemsPerPage; // 6개가 왔으면 다음 페이지 있을 가능성
+        // 현재 게시판 타입의 다음 페이지 여부 업데이트
+        // 가져온 게시글이 4개 미만이면 마지막 페이지
+        _hasMorePagesByBoardType[_currentBoardType] = boards.length >= _itemsPerPage;
         _isBoardLoading = false;
       });
     } catch (e) {
@@ -96,7 +114,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _goToPage(int page) {
     if (page < 1) return;
     setState(() {
-      _currentPage = page;
+      // 현재 게시판 타입의 페이지만 업데이트
+      _pageByBoardType[_currentBoardType] = page;
     });
     _loadRecentBoards();
   }
@@ -104,27 +123,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _buildBoardListContent() {
     if (_isBoardLoading) {
       return Center(
-        child: CircularProgressIndicator(),
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
     if (_recentBoards.isEmpty) {
       return Center(
-        child: Text(
-          '게시글이 없습니다',
-          style: TextStyle(
-            fontSize: 15,
-            color: Colors.grey[400],
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: Text(
+            '게시글이 없습니다',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey[400],
+            ),
           ),
         ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 100),
-      itemCount: _recentBoards.length,
-      separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[200]),
-      itemBuilder: (context, index) => _buildBoardItem(_recentBoards[index]),
+    // 게시글 리스트 (전체 페이지 스크롤에 포함)
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 게시글 아이템들
+        ...List.generate(_recentBoards.length, (index) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildBoardItem(_recentBoards[index]),
+              if (index < _recentBoards.length - 1)
+                Divider(height: 1, color: Colors.grey[200]),
+            ],
+          );
+        }),
+        // 페이지네이션
+        if (!_isBoardLoading && _recentBoards.isNotEmpty)
+          _buildPagination(),
+      ],
     );
   }
 
@@ -189,10 +228,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 right: isSmallScreen ? 16.0 : 24.0,
                 bottom: isSmallScreen ? 16.0 : 24.0,
               ),
-              child: SizedBox(
-                height: screenSize.height * 0.6, // 화면 높이의 60%
-                child: _buildStoreBoard(isSmallScreen),
-              ),
+              child: _buildStoreBoard(isSmallScreen, screenSize),
+            ),
+
+            // 하단 여유 공간 (회색 배경)
+            Container(
+              height: 100,
+              color: Colors.grey[50],
             ),
           ],
         ),
@@ -250,9 +292,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
 
-  Widget _buildStoreBoard(bool isSmallScreen) {
+  Widget _buildStoreBoard(bool isSmallScreen, Size screenSize) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         // 헤더
         Row(
@@ -345,6 +388,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             tabAlignment: TabAlignment.start,
             padding: EdgeInsets.zero,
             labelPadding: EdgeInsets.symmetric(horizontal: 16),
+            onTap: (index) {
+              // 탭 클릭 시 게시판 타입 변경
+              final selectedTab = _tabs[index];
+              final newBoardType = selectedTab['type'] ?? '';
+              if (newBoardType != _currentBoardType) {
+                setState(() {
+                  _currentBoardType = newBoardType;
+                  if (!_pageByBoardType.containsKey(newBoardType)) {
+                    _pageByBoardType[newBoardType] = 1;
+                    _hasMorePagesByBoardType[newBoardType] = true;
+                  }
+                });
+                _loadRecentBoards();
+              }
+            },
             tabs: _tabs.map((tab) {
               return Tab(
                 child: Row(
@@ -379,51 +437,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
 
-        // 게시글 리스트 (TabBarView로 스와이프 가능)
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+        // 게시글 리스트 (현재 선택된 탭만 표시)
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TabBarView(
-              controller: _tabController,
-              children: _tabs.map((tab) => _buildBoardListContent()).toList(),
-            ),
+            ],
           ),
+          child: _buildBoardListContent(),
         ),
-
-        // 페이지네이션
-        if (!_isBoardLoading && _recentBoards.isNotEmpty)
-          _buildPagination(),
       ],
     );
   }
 
   Widget _buildPagination() {
     return Container(
-      margin: EdgeInsets.only(top: 16),
-      padding: EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -432,7 +472,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           IconButton(
             onPressed: _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
             icon: Icon(Icons.chevron_left),
-            color: _currentPage > 1 ? Color(0xFF64748B) : Colors.grey[300],
+            color: _currentPage > 1 ? Color(0xFF06B6D4) : Colors.grey[300],
           ),
 
           // 페이지 번호들
@@ -442,7 +482,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           IconButton(
             onPressed: _hasMorePages ? () => _goToPage(_currentPage + 1) : null,
             icon: Icon(Icons.chevron_right),
-            color: _hasMorePages ? Color(0xFF64748B) : Colors.grey[300],
+            color: _hasMorePages ? Color(0xFF06B6D4) : Colors.grey[300],
           ),
         ],
       ),
@@ -452,11 +492,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   List<Widget> _buildPageNumbers() {
     List<Widget> pageButtons = [];
 
-    // 현재 페이지 기준으로 -2 ~ +2 페이지 표시
-    int startPage = (_currentPage - 2).clamp(1, _currentPage);
-    int endPage = _currentPage + 2;
+    // 현재 페이지 기준으로 앞뒤 1개씩만 표시
+    int startPage = (_currentPage - 1).clamp(1, _currentPage);
+    // 다음 페이지가 없으면 현재 페이지까지만, 있으면 현재 페이지 + 1까지만
+    int endPage = _hasMorePages ? (_currentPage + 1) : _currentPage;
 
-    // 첫 페이지
+    // 첫 페이지가 1이 아니면 1과 ... 표시
     if (startPage > 1) {
       pageButtons.add(_buildPageButton(1));
       if (startPage > 2) {
@@ -467,11 +508,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
     }
 
-    // 중간 페이지들
+    // 현재 페이지 주변 페이지들 표시 (앞뒤 1개씩만)
     for (int i = startPage; i <= endPage; i++) {
-      if (i == _currentPage || (i < _currentPage) || (i == _currentPage + 1 && _hasMorePages) || (i == _currentPage + 2 && _hasMorePages)) {
-        pageButtons.add(_buildPageButton(i));
-      }
+      pageButtons.add(_buildPageButton(i));
     }
 
     return pageButtons;

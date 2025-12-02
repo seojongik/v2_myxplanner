@@ -104,7 +104,17 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
     if (!_formKey.currentState!.validate()) return;
     if (_contentController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('내용을 입력해주세요')),
+        SnackBar(
+          content: Text(
+            '내용을 입력해주세요',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Colors.orange[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       );
       return;
     }
@@ -167,13 +177,29 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.editingBoard != null ? '게시글이 수정되었습니다' : '게시글이 등록되었습니다'),
+            content: Text(
+              widget.editingBoard != null ? '게시글이 수정되었습니다' : '게시글이 등록되었습니다',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: Color(0xFF06B6D4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.editingBoard != null ? '게시글 수정에 실패했습니다' : '게시글 등록에 실패했습니다'),
+            content: Text(
+              widget.editingBoard != null ? '게시글 수정에 실패했습니다' : '게시글 등록에 실패했습니다',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -182,7 +208,15 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
       print('Stack trace: $stackTrace');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('오류가 발생했습니다. 다시 시도해주세요. ($e)'),
+          content: Text(
+            '오류가 발생했습니다. 다시 시도해주세요.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Colors.red[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } finally {
