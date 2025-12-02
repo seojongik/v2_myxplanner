@@ -9,7 +9,7 @@ from pathlib import Path
 
 # 설정
 REMOTE_NAME = 'planner-origin'
-REMOTE_URL = 'https://github.com/seojongik/v2_myxplanner.git'
+REMOTE_URL = 'git@github.com:seojongik/v2_myxplanner.git'
 FOLDER_PREFIX = 'myxplanner'
 BRANCH = 'main'
 
