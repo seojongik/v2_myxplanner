@@ -118,8 +118,14 @@ def main():
 
     # 2. 커밋 메시지
     commit_message = None
+    auto_mode = False
+    
     if len(sys.argv) > 1:
-        commit_message = sys.argv[1]
+        if sys.argv[1] == '--auto':
+            auto_mode = True
+            commit_message = "자동 커밋"
+        else:
+            commit_message = sys.argv[1]
     else:
         print(f"{Colors.YELLOW}커밋 메시지를 입력하세요:{Colors.RESET}")
         commit_message = input("> ")
@@ -147,10 +153,13 @@ def main():
     ensure_remote(project_root)
 
     # 6. Subtree push
-    response = input(f"{Colors.YELLOW}v2_myxplanner 리포지토리에 Push하시겠습니까? (y/N): {Colors.RESET}").lower()
-    if response != 'y':
-        print_warning("Push를 취소했습니다. 커밋은 모노레포에 저장되었습니다.")
-        sys.exit(0)
+    if auto_mode:
+        print_step(f"자동 모드: Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
+    else:
+        response = input(f"{Colors.YELLOW}v2_myxplanner 리포지토리에 Push하시겠습니까? (y/N): {Colors.RESET}").lower()
+        if response != 'y':
+            print_warning("Push를 취소했습니다. 커밋은 모노레포에 저장되었습니다.")
+            sys.exit(0)
 
     print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH})")
     run_command(
