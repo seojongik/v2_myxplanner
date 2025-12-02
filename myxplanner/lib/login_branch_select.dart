@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'main_page.dart';
 import 'services/api_service.dart';
+import 'services/fcm_service.dart';
 import 'login_group_master_option.dart';
 
 class LoginBranchSelectPage extends StatefulWidget {
@@ -114,7 +116,7 @@ class _LoginBranchSelectPageState extends State<LoginBranchSelectPage>
     }
   }
 
-  void _selectBranch(Map<String, dynamic> branch) {
+  Future<void> _selectBranch(Map<String, dynamic> branch) async {
     final branchId = branch['branch_id'].toString();
     print('지점 선택 완료: ${branch['branch_name']} ($branchId)');
     print('원래 회원 정보: ${widget.memberData}');
@@ -136,6 +138,12 @@ class _LoginBranchSelectPageState extends State<LoginBranchSelectPage>
     // ApiService에 현재 사용자 및 지점 설정
     ApiService.setCurrentUser(selectedMemberData);
     ApiService.setCurrentBranch(branchId, branch);
+    
+    // FCM 토큰 저장 (지점 정보가 설정된 후)
+    if (!kIsWeb) {
+      print('🔔 FCM 토큰 저장 시작...');
+      await FCMService.updateTokenAfterLogin();
+    }
 
     // 선택 확인 다이얼로그 표시
     _showSelectionDialog(branch, selectedMemberData);

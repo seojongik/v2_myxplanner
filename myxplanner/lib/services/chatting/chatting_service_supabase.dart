@@ -4,6 +4,7 @@ import 'package:rxdart/rxdart.dart';
 import 'chat_models.dart';
 import '../api_service.dart';
 import '../supabase_adapter.dart';
+import '../chat_notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -386,6 +387,9 @@ class ChattingServiceSupabase {
   static void setChatPageActive(bool isActive) {
     _isChatPageActive = isActive;
     print('📱 [ChattingServiceSupabase] 채팅 페이지 활성화 상태: $isActive');
+    
+    // ChatNotificationService와 동기화
+    ChatNotificationService().setChatPageOpen(isActive);
   }
   
   static bool get isChatPageActive => _isChatPageActive;

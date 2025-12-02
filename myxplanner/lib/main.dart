@@ -21,6 +21,7 @@ import 'crm_member_redirect_page.dart';
 import 'utils/debug_logger.dart';
 import 'stubs/html_stub.dart' if (dart.library.html) 'dart:html' as html;
 import 'services/fcm_service.dart';
+import 'services/chat_notification_service.dart';
 import 'services/supabase_adapter.dart';
 import 'services/config_service.dart';
 
@@ -242,6 +243,18 @@ void main() async {
       }
     }
     
+    // 채팅 알림 서비스 초기화 (CRM Lite Pro 스타일)
+    print('🚀 [STEP 4.6] 채팅 알림 서비스 초기화 시작');
+    debugPrint('🚀 [STEP 4.6] 채팅 알림 서비스 초기화 시작');
+    try {
+      await ChatNotificationService().initialize();
+      print('✅ [STEP 4.6] 채팅 알림 서비스 초기화 완료');
+      debugPrint('✅ [STEP 4.6] 채팅 알림 서비스 초기화 완료');
+    } catch (e) {
+      print('⚠️ [STEP 4.6] 채팅 알림 서비스 초기화 실패: $e');
+      debugPrint('⚠️ [STEP 4.6] 채팅 알림 서비스 초기화 실패: $e');
+    }
+    
     // API 서비스 초기화
     print('🚀 [STEP 5] API 서비스 초기화');
     debugPrint('🚀 [STEP 5] API 서비스 초기화');
@@ -284,8 +297,11 @@ const bool kForceLoginOnHotReload = true; // Hot reload 시 강제 로그인 페
 class MyGolfPlannerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => SmsAuthService(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SmsAuthService()),
+        ChangeNotifierProvider(create: (_) => ChatNotificationService()),
+      ],
       child: MaterialApp(
       title: 'MyGolfPlanner - 골프 예약 관리 시스템',
       debugShowCheckedModeBanner: false,
