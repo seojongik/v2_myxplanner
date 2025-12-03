@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "101436238734",
+    "project_id": "autogolfcrm-messaging",
+    "storage_bucket": "autogolfcrm-messaging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:101436238734:android:79880c733be09b34ff92df",
+        "android_client_info": {
+          "package_name": "com.enabletech.autogolfcrm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB88lKjes3zXeszyUjll85-0YJorZ_Atzk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

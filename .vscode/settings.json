@@ -26,7 +26,9 @@
   "code-runner.showExecutionMessage": true,
   "code-runner.enableAppInsights": false,
   "code-runner.ignoreSelection": false,
-  "code-runner.respectShebang": true
+  "code-runner.respectShebang": true,
+  "cursorpyright.analysis.autoImportCompletions": true,
+  "cursorpyright.analysis.typeCheckingMode": "basic"
 }
 
 

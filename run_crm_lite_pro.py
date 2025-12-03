@@ -199,12 +199,21 @@ platform_choice = select_platform()
 if platform_choice == '1':
     # Android만 실행
     device_id = find_android_device()
-    
+
     if not device_id:
         if not start_android_emulator():
             sys.exit(1)
-        device_id = find_android_device()
-    
+        # 에뮬레이터 시작 후 디바이스 찾기 (최대 10초 추가 대기)
+        for _ in range(10):
+            device_id = find_android_device()
+            if device_id:
+                break
+            time.sleep(1)
+
+    if not device_id:
+        print("❌ Android 디바이스를 찾을 수 없습니다.")
+        sys.exit(1)
+
     print(f"\n🚀 CRM Lite Pro 실행 중... (Android 디바이스: {device_id})")
     subprocess.run(['flutter', 'run', '-d', device_id], cwd=PROJECT_DIR)
 
@@ -230,8 +239,23 @@ elif platform_choice == '2':
         # 여러 디바이스가 있으면 선택
         device_id = select_ios_device()
     
+    if not device_id:
+        print("❌ iOS 디바이스를 찾을 수 없습니다.")
+        sys.exit(1)
+    
     print(f"\n🚀 CRM Lite Pro 실행 중... (iOS 디바이스: {device_id})")
-    subprocess.run(['flutter', 'run', '-d', device_id], cwd=PROJECT_DIR)
+    result = subprocess.run(['flutter', 'run', '-d', device_id], cwd=PROJECT_DIR)
+    
+    # 에러 발생 시 처리 (에러 코드만 확인, 출력은 이미 표시됨)
+    if result.returncode != 0:
+        print("\n" + "="*50)
+        print("❌ iOS 빌드 실패")
+        print("="*50)
+        print("\n💡 일반적인 해결 방법:")
+        print("1. Xcode > Settings > Components에서 필요한 iOS 플랫폼 설치")
+        print("2. 디바이스가 신뢰하는 컴퓨터로 등록되어 있는지 확인")
+        print("3. Xcode에서 디바이스의 iOS 버전을 지원하는지 확인")
+        print("4. iOS 시뮬레이터 사용 고려 (푸시 알림 제한적)")
 
 else:
     # 둘 다 동시 실행

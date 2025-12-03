@@ -143,9 +143,9 @@ def main():
                 print_warning(f"Push되지 않은 커밋이 {parts[1]}개 있습니다.")
                 response = input(f"{Colors.YELLOW}Push하시겠습니까? (y/N): {Colors.RESET}").lower()
                 if response == 'y':
-                    print_step(f"Push 중 (origin/{current_branch})")
-                    run_command(['git', 'push', 'origin', current_branch], cwd=root)
-                    print_success("Push 완료!")
+                    print_step(f"Push 중 (origin/{current_branch}) - 강제 push (로컬 우선)")
+                    run_command(['git', 'push', 'origin', current_branch, '--force'], cwd=root)
+                    print_success("Push 완료! (로컬 우선 강제 push)")
                 sys.exit(0)
 
         print("할 일이 없습니다.")
@@ -202,12 +202,12 @@ def main():
         print_warning("Push를 취소했습니다. 커밋은 로컬에 저장되었습니다.")
         sys.exit(0)
 
-    print_step(f"Push 중 (origin/{current_branch})")
-    run_command(['git', 'push', 'origin', current_branch], cwd=root)
+    print_step(f"Push 중 (origin/{current_branch}) - 강제 push (로컬 우선)")
+    run_command(['git', 'push', 'origin', current_branch, '--force'], cwd=root)
 
     print()
-    print_success("전체 Push 완료!")
-    print(f"{Colors.GREEN}✓ {REMOTE_URL} 에 전체 프로젝트가 push 되었습니다.{Colors.RESET}")
+    print_success("전체 Push 완료! (로컬 우선 강제 push)")
+    print(f"{Colors.GREEN}✓ {REMOTE_URL} 에 전체 프로젝트가 push 되었습니다. (로컬 우선){Colors.RESET}")
 
 if __name__ == '__main__':
     main()

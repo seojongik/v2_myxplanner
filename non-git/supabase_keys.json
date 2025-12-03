@@ -1,0 +1,10 @@
+{
+  "publishable_key": "sb_publishable_dQNBGjisqLUd9LT03Om8mA_BwjTiroS",
+  "secret_key": "sb_secret_8ksIVyUpIYgool7mMYBjcA_hBoJProw",
+  "access_token": "sbp_acf5be44fbb3e07f953a200a25a8bbcfbeb95e27",
+  "db_password": "izXjcvPhF8Xql7li",
+  "connection_string": "postgresql://postgres.yejialakeivdhwntmagf:izXjcvPhF8Xql7li@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres",
+  "pooler_connection_string": "postgresql://postgres.yejialakeivdhwntmagf:izXjcvPhF8Xql7li@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true",
+  "note": "Supabase API 키 정보 - git에 커밋하지 마세요!"
+}
+

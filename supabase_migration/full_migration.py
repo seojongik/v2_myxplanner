@@ -1050,6 +1050,31 @@ def reset_all_sequences(cursor):
     print(f"시퀀스 재설정 완료: 성공 {success_count}개, 건너뜀 {fail_count}개")
 
 
+def reset_single_sequence(cursor, table_name: str, column_name: str):
+    """단일 테이블의 시퀀스만 재설정"""
+    try:
+        # 해당 테이블의 최대 ID 조회
+        cursor.execute(f"SELECT MAX({column_name}) FROM {table_name}")
+        result = cursor.fetchone()
+        max_id = result[0] if result[0] is not None else 0
+        
+        # 시퀀스 재설정
+        cursor.execute(f"""
+            SELECT setval(
+                pg_get_serial_sequence('{table_name}', '{column_name}'), 
+                {max_id}, 
+                true
+            )
+        """)
+        
+        print(f"  ✓ {table_name}.{column_name}: 시퀀스를 {max_id}로 재설정 (다음 ID: {max_id + 1})")
+        return True
+        
+    except Exception as e:
+        print(f"  ✗ {table_name}.{column_name}: 시퀀스 재설정 실패 ({str(e)})")
+        return False
+
+
 # ==================== 메인 함수 ====================
 
 def migrate_single_table(table_name: str):
@@ -1175,10 +1200,87 @@ def main():
             else:
                 print("사용법: python full_migration.py --table <테이블명1> [테이블명2] ...")
                 return
+        elif sys.argv[1] == '--reset-sequence':
+            # 특정 테이블의 시퀀스만 재설정
+            if len(sys.argv) > 2:
+                table_name = sys.argv[2]
+                if table_name not in SERIAL_COLUMNS:
+                    print(f"✗ 알 수 없는 테이블: {table_name}")
+                    print(f"  사용 가능한 테이블: {', '.join(SERIAL_COLUMNS.keys())}")
+                    return
+                
+                column_name = SERIAL_COLUMNS[table_name]
+                
+                # Supabase 연결
+                password = load_supabase_password()
+                if not password:
+                    print("✗ Supabase 비밀번호를 찾을 수 없습니다.")
+                    return
+                
+                keys_file = os.path.join(os.path.dirname(__file__), 'supabase_keys.json')
+                connection_string = None
+                if os.path.exists(keys_file):
+                    with open(keys_file, 'r', encoding='utf-8') as f:
+                        keys = json.load(f)
+                        connection_string = keys.get('connection_string')
+                
+                try:
+                    if connection_string:
+                        parsed = parse_connection_string(connection_string)
+                        conn_params = {
+                            'host': parsed['host'],
+                            'port': parsed['port'],
+                            'database': parsed['database'],
+                            'user': parsed['user'],
+                            'password': password,
+                            'sslmode': 'require',
+                            'connect_timeout': 10
+                        }
+                    else:
+                        conn_params = {
+                            'host': SUPABASE_CONFIG['host'],
+                            'port': SUPABASE_CONFIG['port'],
+                            'database': SUPABASE_CONFIG['database'],
+                            'user': SUPABASE_CONFIG['user'],
+                            'password': password,
+                            'sslmode': 'require',
+                            'connect_timeout': 10
+                        }
+                    
+                    print(f"\nSupabase 연결 중...")
+                    conn = psycopg2.connect(**conn_params)
+                    conn.autocommit = False
+                    cursor = conn.cursor()
+                    print(f"✓ Supabase 연결 성공!")
+                    
+                    print(f"\n{table_name}.{column_name} 시퀀스 재설정 중...")
+                    if reset_single_sequence(cursor, table_name, column_name):
+                        conn.commit()
+                        print(f"\n✓ 시퀀스 재설정 완료!")
+                    else:
+                        conn.rollback()
+                        print(f"\n✗ 시퀀스 재설정 실패")
+                    
+                except Exception as e:
+                    print(f"✗ 오류 발생: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    if 'cursor' in locals():
+                        cursor.close()
+                    if 'conn' in locals():
+                        conn.close()
+                    print("Supabase 연결 종료")
+                return
+            else:
+                print("사용법: python full_migration.py --reset-sequence <테이블명>")
+                print(f"  사용 가능한 테이블: {', '.join(SERIAL_COLUMNS.keys())}")
+                return
         elif sys.argv[1] == '--help':
             print("사용법:")
             print("  전체 마이그레이션: python full_migration.py")
             print("  특정 테이블만: python full_migration.py --table <테이블명1> [테이블명2] ...")
+            print("  시퀀스 재설정: python full_migration.py --reset-sequence <테이블명>")
             return
     
     print("=" * 60)
