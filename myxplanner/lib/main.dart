@@ -24,6 +24,7 @@ import 'services/fcm_service.dart';
 import 'services/chat_notification_service.dart';
 import 'services/supabase_adapter.dart';
 import 'services/config_service.dart';
+import 'services/ad_service.dart';
 
 void main() async {
   // 강제로 로그 출력 (예외 발생 전에도 보이도록)
@@ -235,6 +236,11 @@ void main() async {
         await SupabaseAdapter.initialize();
         print('✅ [STEP 4.5] Supabase 초기화 완료');
         debugPrint('✅ [STEP 4.5] Supabase 초기화 완료');
+        
+        // 광고 서비스 초기화
+        print('📢 [STEP 4.5.1] 광고 서비스 초기화 시작');
+        await AdService().initialize();
+        print('✅ [STEP 4.5.1] 광고 서비스 초기화 완료');
       } catch (e) {
         print('❌ [STEP 4.5] Supabase 초기화 실패: $e');
         debugPrint('❌ [STEP 4.5] Supabase 초기화 실패: $e');
