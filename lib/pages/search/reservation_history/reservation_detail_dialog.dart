@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../../services/otp_service.dart';
 import '../../../services/api_service.dart';
-import '../../../config/admob_config.dart';
+import '../../../widgets/dynamic_ad_widget.dart';
 import 'reservation_detail_ts_cancel.dart';
 import 'reservation_detail_ls_cancel.dart';
 import 'reservation_detail_sp_cancel.dart';
@@ -34,69 +33,12 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   Map<String, dynamic>? _couponPreview;
   Map<String, dynamic>? _issuedCouponPreview;
 
-  // 배너 광고
-  BannerAd? _bannerAd;
-  bool _isBannerAdLoaded = false;
-
   @override
   void initState() {
     super.initState();
     _generateOTPIfNeeded();
     _initializeTabController();
     _loadTabData();
-    // 배너 광고는 context가 필요하므로 첫 프레임 이후 로드
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadBannerAd();
-    });
-  }
-
-  void _loadBannerAd() async {
-    try {
-      // 웹 환경에서는 애드몹이 지원되지 않음
-      if (!AdMobConfig.isMobile) {
-        print('⚠️ 웹 환경에서는 애드몹 광고를 지원하지 않습니다');
-        return;
-      }
-
-      // 화면 너비에 맞는 적응형 배너 사이즈 가져오기
-      final width = MediaQuery.of(context).size.width.truncate();
-      final adSize = await AdSize.getAnchoredAdaptiveBannerAdSize(
-        Orientation.portrait,
-        width,
-      );
-
-      if (adSize == null) {
-        print('⚠️ 적응형 배너 사이즈를 가져올 수 없습니다');
-        return;
-      }
-
-      print('📱 배너 광고 로드 시작 (AdUnitId: ${AdMobConfig.getBannerAdUnitId(isTest: true)})');
-
-      _bannerAd = BannerAd(
-        adUnitId: AdMobConfig.getBannerAdUnitId(isTest: true), // TODO: 배포 시 false로 변경
-        size: adSize,
-        request: const AdRequest(),
-        listener: BannerAdListener(
-          onAdLoaded: (ad) {
-            print('✅ 배너 광고 로드 성공 (크기: ${adSize.width}x${adSize.height})');
-            if (mounted) {
-              setState(() => _isBannerAdLoaded = true);
-            }
-          },
-          onAdFailedToLoad: (ad, error) {
-            ad.dispose();
-            print('❌ 배너 광고 로드 실패: $error');
-            print('   - 코드: ${error.code}');
-            print('   - 메시지: ${error.message}');
-            print('   - 도메인: ${error.domain}');
-          },
-        ),
-      )..load();
-    } catch (e, stackTrace) {
-      print('❌ 배너 광고 로드 중 예외 발생: $e');
-      print('   스택 트레이스: $stackTrace');
-      // 에러가 발생해도 앱은 정상 동작하도록 함
-    }
   }
   
   void _initializeTabController() {
@@ -172,7 +114,6 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   @override
   void dispose() {
     _tabController?.dispose();
-    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -1865,14 +1806,11 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
               ),
             ),
 
-            // 배너 광고
-            if (_isBannerAdLoaded && _bannerAd != null)
-              Container(
-                width: double.infinity,
-                height: _bannerAd!.size.height.toDouble(),
-                color: Colors.white,
-                child: AdWidget(ad: _bannerAd!),
-              ),
+            // 동적 배너 광고 (Supabase 정책 기반)
+            DynamicAdWidget(
+              placementId: 'myxplanner_reservation_detail_dialog',
+              branchId: ApiService.getCurrentBranchId(),
+            ),
 
             // 하단 버튼 영역
             Container(
