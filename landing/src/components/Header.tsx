@@ -1,5 +1,6 @@
-import { Menu, LogOut, Building2, ArrowLeftRight } from 'lucide-react';
+import { Menu, LogOut, Building2, ArrowLeftRight, CreditCard } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { SubscriptionPage } from './SubscriptionPage';
 
 interface HeaderProps {
   onLoginClick: () => void;
@@ -26,6 +27,8 @@ export function Header({ onLoginClick, onRegisterClick }: HeaderProps) {
   const [demoButtonText, setDemoButtonText] = useState('데모체험');
   const [isShimmering, setIsShimmering] = useState(false);
   const [textOpacity, setTextOpacity] = useState(1);
+  const [showSubscriptionPage, setShowSubscriptionPage] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     checkLoginStatus();
@@ -79,13 +82,26 @@ export function Header({ onLoginClick, onRegisterClick }: HeaderProps) {
       const currentBranch = localStorage.getItem('currentBranch');
 
       if (currentUser && currentBranch) {
-        setUserData(JSON.parse(currentUser));
-        setBranchData(JSON.parse(currentBranch));
+        const parsedUser = JSON.parse(currentUser);
+        const parsedBranch = JSON.parse(currentBranch);
+        setUserData(parsedUser);
+        setBranchData(parsedBranch);
         setIsLoggedIn(true);
+        // 이메일 설정 (실제 이메일 > branch_id 순서로 사용)
+        // branch_id가 이메일 형식이 아니면 임시 이메일 생성
+        const email = parsedUser.email || parsedBranch.email;
+        if (email && email.includes('@')) {
+          setUserEmail(email);
+        } else {
+          // 이메일 형식이 아니면 branch_id 기반 임시 이메일 생성
+          const branchId = parsedBranch.branch_id || parsedUser.branch_id || 'unknown';
+          setUserEmail(`${branchId}@autogolfcrm.com`);
+        }
       } else {
         setIsLoggedIn(false);
         setUserData(null);
         setBranchData(null);
+        setUserEmail('');
       }
     } catch (error) {
       console.error('로그인 상태 확인 오류:', error);
@@ -223,6 +239,13 @@ export function Header({ onLoginClick, onRegisterClick }: HeaderProps) {
             {isLoggedIn ? (
               <div className="flex items-center gap-3">
                 <button
+                  onClick={() => setShowSubscriptionPage(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-blue-600 transition-colors font-medium"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>구독관리</span>
+                </button>
+                <button
                   onClick={handleCRMClick}
                   className="px-6 py-2 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
                 >
@@ -300,6 +323,16 @@ export function Header({ onLoginClick, onRegisterClick }: HeaderProps) {
               {isLoggedIn ? (
                 <>
                   <button
+                    onClick={() => {
+                      setShowSubscriptionPage(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-blue-600 transition-colors font-medium"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>구독관리</span>
+                  </button>
+                  <button
                     onClick={handleCRMClick}
                     className="px-6 py-2 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
                   >
@@ -339,6 +372,14 @@ export function Header({ onLoginClick, onRegisterClick }: HeaderProps) {
           )}
         </div>
       </header>
+
+      {/* 구독 관리 페이지 */}
+      {showSubscriptionPage && (
+        <SubscriptionPage
+          userEmail={userEmail}
+          onClose={() => setShowSubscriptionPage(false)}
+        />
+      )}
     </>
   );
 }

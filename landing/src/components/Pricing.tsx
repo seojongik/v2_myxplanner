@@ -21,6 +21,11 @@ export function Pricing({ onLoginClick, onRegisterClick }: PricingProps) {
   const [selectedPlan, setSelectedPlan] = useState<{ name: string; monthlyPrice: number } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthChoiceModal, setShowAuthChoiceModal] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ email: string; name: string; company: string }>({
+    email: '',
+    name: '',
+    company: ''
+  });
 
   useEffect(() => {
     // 로그인 상태 확인
@@ -28,6 +33,21 @@ export function Pricing({ onLoginClick, onRegisterClick }: PricingProps) {
       const currentUser = localStorage.getItem('currentUser');
       const currentBranch = localStorage.getItem('currentBranch');
       setIsLoggedIn(!!(currentUser && currentBranch));
+      
+      // 사용자 정보 가져오기
+      if (currentUser) {
+        try {
+          const userData = JSON.parse(currentUser);
+          const branchData = currentBranch ? JSON.parse(currentBranch) : {};
+          setUserInfo({
+            email: userData.email || userData.branch_id || '',
+            name: userData.name || userData.branch_director_name || '',
+            company: branchData.branch_name || ''
+          });
+        } catch (e) {
+          console.error('사용자 정보 파싱 오류:', e);
+        }
+      }
     };
 
     checkLoginStatus();
@@ -537,6 +557,9 @@ export function Pricing({ onLoginClick, onRegisterClick }: PricingProps) {
           }}
           planName={selectedPlan.name}
           monthlyPrice={selectedPlan.monthlyPrice}
+          userEmail={userInfo.email}
+          userName={userInfo.name}
+          companyName={userInfo.company}
         />
       )}
 

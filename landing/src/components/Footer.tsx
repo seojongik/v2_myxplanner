@@ -14,7 +14,8 @@ export function Footer() {
             <div className="text-sm text-gray-400 space-y-2">
               <p>주식회사 이네이블테크 | 대표 조스테파노</p>
               <p>서울시 양천구 신월로 376 8층 k16호</p>
-              <p>사업자등록번호 746-87-03818, 전화번호 02-6953-7398</p>
+              <p>사업자등록번호 746-87-03818 | 통신판매업신고번호: 신청중</p>
+              <p>전화번호 02-6953-7398</p>
               <p className="mt-4">EnableTech Co., Ltd</p>
             </div>
           </div>
