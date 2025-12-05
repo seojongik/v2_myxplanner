@@ -582,10 +582,8 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           totalAmount: totalAmount,
           onPaymentSuccess: (paymentResult) async {
             // 결제 성공 시 처리 (결제 페이지는 아직 열려있음)
-            // paymentId와 txId가 모두 있어야 실제 결제 완료로 간주
             final paymentId = paymentResult['paymentId'] as String?;
             final txId = paymentResult['txId'] as String?;
-            final isTest = paymentResult['isTest'] as bool?;
             
             if (paymentId == null || paymentId.isEmpty) {
               debugPrint('❌ 결제 ID가 없습니다. 결제가 완료되지 않았습니다.');
@@ -602,64 +600,15 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
             debugPrint('✅ 결제 성공 확인 - PaymentId: $paymentId, TxId: $txId');
             
             // ========== 회원권 부여 로직 ==========
-            // 채널 키로 테스트 여부 판별 (DB 조회 전에 이미 판별 완료)
-            // channel-key-4103c2a4-ab14-4707-bdb3-6c6254511ba0 → 테스트
-            // 나머지 모든 채널 키 → 실연동
+            // 포트원 API에서 실결제 검증 후 회원권 부여 진행
+            // (테스트 결제는 _processPaymentAfterPortone 내부에서 차단됨)
             
-            // 관리자 로그인 여부 확인
-            final isAdminLogin = ApiService.isAdminLogin();
-            
-            // 1. 테스트 결제인 경우 처리
-            if (isTest == true) {
-              // 관리자 로그인인 경우: 테스트 결제여도 회원권 부여 진행 (프로그램 테스트용)
-              if (isAdminLogin) {
-                debugPrint('⚠️⚠️⚠️ 테스트 결제이지만 관리자 로그인입니다. 회원권 부여를 진행합니다. (프로그램 테스트용)');
-                await _processPaymentAfterPortone(
-                  portonePaymentId: paymentId,
-                  portoneTxId: txId,
-                  channelKey: channelKey,
-                  isTest: isTest, // true (테스트)
-                  shouldClosePaymentPage: true, // 처리 완료 후 결제 페이지 닫기
-                );
-                return;
-              }
-              
-              // 일반 로그인인 경우: 테스트 결제면 회원권 부여 안 함
-              debugPrint('⚠️⚠️⚠️ 테스트 결제입니다! 회원권을 부여하지 않습니다.');
-              
-              // 팝업 다이얼로그로 안내
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (BuildContext dialogContext) {
-                    return AlertDialog(
-                      title: Text('테스트 결제 안내'),
-                      content: Text('테스트 결제모듈로 실제 결제 및 회원권 부여가 되지 않았습니다. 관리자에게 문의 바랍니다.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(dialogContext).pop();
-                          },
-                          child: Text('확인'),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              }
-              return; // 테스트 결제는 회원권 부여하지 않음
-            }
-            
-            // 2. 실제 결제인 경우 (isTest == false) → 회원권 부여 진행
-            // DB는 결과를 저장하는 용도일 뿐, 판별은 이미 끝남
-            debugPrint('✅ 실제 결제 확인됨. 회원권 부여를 진행합니다.');
+            debugPrint('✅ 결제 확인됨. 회원권 부여를 진행합니다.');
             await _processPaymentAfterPortone(
               portonePaymentId: paymentId,
               portoneTxId: txId,
               channelKey: channelKey,
-              isTest: isTest, // false (실연동)
-              shouldClosePaymentPage: true, // 처리 완료 후 결제 페이지 닫기
+              shouldClosePaymentPage: true,
             );
           },
           onPaymentFailed: (error) {
@@ -755,7 +704,6 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
     required String portonePaymentId,
     String? portoneTxId,
     String? channelKey,
-    bool? isTest, // 결제 응답에서 받은 테스트 결제 여부
     bool shouldClosePaymentPage = false,
   }) async {
     // 결제 ID 검증
@@ -831,14 +779,92 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
       // 회원 정보
       final memberId = widget.selectedMember?['member_id'] ?? 1;
       final memberName = widget.selectedMember?['member_name'] ?? '테스트회원';
+      final totalAmount = (contract['price'] ?? 0) as int;
+      final orderName = '${contract['contract_name'] ?? '회원권'} - $memberName';
 
       debugPrint('=== 포트원 결제 완료 후 회원권 등록 시작 ===');
       debugPrint('포트원 결제 ID: $portonePaymentId');
       debugPrint('회원 ID: $memberId');
       debugPrint('계약 ID: ${contract['contract_id']}');
       debugPrint('계약명: ${contract['contract_name']}');
+      debugPrint('결제 금액: $totalAmount원');
 
-      // 1. v3_contract_history 저장
+      // ============================================================
+      // 🔐 1단계: 포트원 API로 실제 결제 검증 (가장 먼저!)
+      // ============================================================
+      debugPrint('🔐 1단계: 포트원 API로 실제 결제 상태 검증 중...');
+      
+      final verificationResult = await PortonePaymentService.verifyPaymentFromPortone(
+        paymentId: portonePaymentId,
+        expectedAmount: totalAmount,
+      );
+      
+      if (verificationResult['success'] != true) {
+        debugPrint('❌ 포트원 API 호출 실패: ${verificationResult['error']}');
+        throw Exception('결제 검증 실패: ${verificationResult['error']}');
+      }
+      
+      if (verificationResult['verified'] != true) {
+        debugPrint('❌ 결제 검증 실패: ${verificationResult['error']}');
+        throw Exception('결제가 완료되지 않았습니다: ${verificationResult['error']}');
+      }
+      
+      // 포트원 API에서 확인한 테스트 여부 (채널키 기반 판별보다 더 정확)
+      final verifiedIsTest = verificationResult['isTest'] as bool?;
+      final verifiedAmount = verificationResult['amount'] as int?;
+      final verifiedPaidAt = verificationResult['paidAt'] as String?;
+      
+      debugPrint('✅ 포트원 API 검증 성공!');
+      debugPrint('   - 결제 상태: PAID');
+      debugPrint('   - 결제 금액: $verifiedAmount원');
+      debugPrint('   - 결제 시간: $verifiedPaidAt');
+      debugPrint('   - 테스트 여부: ${verifiedIsTest == true ? "테스트" : "실결제"}');
+      
+      // 테스트 결제인 경우 무조건 차단 (실전 운영)
+      if (verifiedIsTest == true) {
+        debugPrint('❌ 테스트 결제입니다. 회원권을 부여하지 않습니다.');
+        throw Exception('테스트 결제모듈로 결제가 진행되었습니다. 실결제 채널로 다시 시도해주세요.');
+      }
+      
+      // ============================================================
+      // 🔐 2단계: 결제 정보 DB 저장 (검증 후에만 실행)
+      // ============================================================
+      debugPrint('🔐 2단계: 결제 정보 DB 저장 중...');
+      
+      // custom_data에 검증 정보 저장
+      final customData = {'verified': true, 'verifiedAt': DateTime.now().toIso8601String()};
+      
+      // 먼저 결제 정보를 저장 (contractHistoryId는 0으로, 나중에 업데이트)
+      final paymentSaveResult = await PortonePaymentService.savePaymentToDatabase(
+        portonePaymentId: portonePaymentId,
+        portoneTxId: portoneTxId,
+        contractHistoryId: 0, // 임시값, 회원권 저장 후 업데이트
+        memberId: memberId,
+        branchId: branchId,
+        channelKey: channelKey ?? PortonePaymentService.defaultChannelKey,
+        paymentAmount: totalAmount,
+        paymentMethod: 'CARD',
+        paymentProvider: 'TOSSPAYMENTS',
+        orderName: orderName,
+        paymentStatus: 'PAID',
+        paymentRequestedAt: DateTime.now(),
+        paymentPaidAt: verifiedPaidAt != null ? DateTime.parse(verifiedPaidAt) : DateTime.now(),
+        customData: customData,
+      );
+
+      if (paymentSaveResult['success'] != true) {
+        debugPrint('❌ 포트원 결제 정보 저장 실패: ${paymentSaveResult['error']}');
+        throw Exception('결제 정보 저장 실패: ${paymentSaveResult['error']}');
+      }
+      
+      final paymentRecordId = paymentSaveResult['insertId'];
+      debugPrint('✅ 결제 정보 저장 완료 - ID: $paymentRecordId');
+      
+      // ============================================================
+      // 🔐 3단계: 회원권 저장 (검증 및 결제 정보 저장 후에만 실행)
+      // ============================================================
+      debugPrint('🔐 3단계: 회원권 저장 중...');
+      
       final contractHistoryData = {
         'branch_id': branchId,
         'member_id': memberId,
@@ -848,7 +874,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         'contract_type': widget.membershipType,
         'contract_date': contractDate,
         'contract_register': DateTime.now().toIso8601String(),
-        'payment_type': '포트원결제', // 포트원 결제로 변경
+        'payment_type': '포트원결제',
         'contract_history_status': '활성',
         'price': contract['price'] ?? 0,
         'contract_credit': contract['contract_credit'] ?? 0,
@@ -863,9 +889,9 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         'contract_term_month_expiry_date': termEndDate != null ? DateFormat('yyyy-MM-dd').format(termEndDate!) : null,
         'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
         'pro_name': selectedProName,
+        'portone_payment_id': portonePaymentId, // 결제 ID 연결
       };
 
-      print('계약 히스토리 저장 중...');
       final historyResponse = await ApiService.addData(
         table: 'v3_contract_history',
         data: contractHistoryData,
@@ -875,52 +901,24 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         throw Exception('계약 히스토리 저장 실패');
       }
 
-      // insertId를 정수로 변환 (문자열일 수 있음)
       final contractHistoryId = _safeParseInt(historyResponse['insertId']);
-      print('계약 히스토리 저장 완료 - ID: $contractHistoryId');
-
-      // 2. 포트원 결제 정보 저장
-      final totalAmount = (contract['price'] ?? 0) as int;
-      final orderName = '${contract['contract_name'] ?? '회원권'} - $memberName';
+      debugPrint('✅ 회원권 저장 완료 - ID: $contractHistoryId');
       
-      // custom_data에 isTest 정보 저장
-      final customData = isTest != null ? {'isTest': isTest} : null;
-      
-      final paymentSaveResult = await PortonePaymentService.savePaymentToDatabase(
-        portonePaymentId: portonePaymentId,
-        portoneTxId: portoneTxId,
-        contractHistoryId: contractHistoryId,
-        memberId: memberId,
-        branchId: branchId,
-        channelKey: channelKey ?? PortonePaymentService.defaultChannelKey,
-        paymentAmount: totalAmount,
-        paymentMethod: 'CARD',
-        paymentProvider: 'TOSSPAYMENTS',
-        orderName: orderName,
-        paymentStatus: 'PAID',
-        paymentRequestedAt: DateTime.now(),
-        paymentPaidAt: DateTime.now(),
-        customData: customData, // isTest 정보를 custom_data에 저장
-      );
-
-      if (paymentSaveResult['success'] != true) {
-        debugPrint('❌ 포트원 결제 정보 저장 실패: ${paymentSaveResult['error']}');
-        throw Exception('결제 정보 저장 실패: ${paymentSaveResult['error']}');
-      } else {
-        debugPrint('✅ 포트원 결제 정보 저장 완료');
+      // 결제 정보에 contractHistoryId 업데이트
+      if (paymentRecordId != null) {
+        await ApiService.updateData(
+          table: 'v2_portone_payments',
+          data: {'contract_history_id': contractHistoryId},
+          where: [
+            {'field': 'portone_payment_uid', 'operator': '=', 'value': portonePaymentId}
+          ],
+        );
+        debugPrint('✅ 결제 정보에 회원권 ID 연결 완료');
       }
       
-      // 3. DB에서 저장된 결제 정보를 조회하여 결제 완료 여부만 확인
-      // (테스트 여부는 이미 채널 키로 판별 완료, DB는 결과 저장용)
-      debugPrint('🔍 DB에서 저장된 결제 정보를 확인합니다...');
-      final verificationResult = await _verifyPaymentFromDatabase(portonePaymentId);
-      
-      if (!verificationResult['isPaid']) {
-        debugPrint('❌ DB에서 결제 정보를 확인할 수 없습니다. 회원권 부여를 중단합니다.');
-        throw Exception('결제 정보를 확인할 수 없습니다: ${verificationResult['error']}');
-      }
-      
-      debugPrint('✅ DB 확인 결과: 결제가 완료되었습니다. (payment_status: PAID)');
+      debugPrint('============================================================');
+      debugPrint('✅ 결제 검증 완료 - 회원권 부여 진행');
+      debugPrint('============================================================');
 
       // 4. 크레딧 적립 (v2_bills)
       final contractCredit = _safeParseInt(contract['contract_credit']);
@@ -974,6 +972,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
         );
 
         // v3_LS_countings 추가 (v2_LS_contracts 제외)
+        // DB 스키마에 맞는 필드만 전송 (LS_contract_pro, LS_set_id는 DB에 없음)
         final lsCountingData = {
           'LS_transaction_type': '레슨권 구매',
           'LS_date': contractDate,
@@ -985,12 +984,10 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'LS_contract_id': null,
           'contract_history_id': contractHistoryId,
           'LS_id': null,
-          'LS_contract_pro': null,
           'LS_balance_min_before': 0,
           'LS_net_min': contractLS,
           'LS_balance_min_after': contractLS,
           'LS_counting_source': 'v3_contract_history',
-          'LS_set_id': null,
           'LS_expiry_date': DateFormat('yyyy-MM-dd').format(contractEndDate),
           'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
           'pro_name': selectedProName,
@@ -1057,6 +1054,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'member_name': memberName,
           'non_member_name': null,
           'non_member_phone': null,
+          'contract_games_expiry_date': contractHistoryData['contract_games_expiry_date'],
         };
 
         await ApiService.addData(
@@ -1372,6 +1370,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'member_name': memberName,
           'non_member_name': null,
           'non_member_phone': null,
+          'contract_games_expiry_date': contractHistoryData['contract_games_expiry_date'],
         };
 
         await ApiService.addData(

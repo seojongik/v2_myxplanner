@@ -8,11 +8,43 @@ class PortonePaymentService {
   // 포트원 상점 ID
   static const String storeId = 'store-58c8f5b8-6bc6-4efb-8dd0-8a98475a4246';
   
-  // 기본 채널 키 (토스페이먼츠 - 일반결제)
-  static const String defaultChannelKey = 'channel-key-4103c2a4-ab14-4707-bdb3-6c6254511ba0';
+  // ============================================================
+  // 채널 키 설정 (토스페이먼츠)
+  // ============================================================
+  
+  // 실연동 채널 키 (토스페이먼츠 - 카드사 계약 완료)
+  // 발급일: 2024년 (실결제용)
+  static const String liveChannelKey = 'channel-key-4ba942b1-404c-4b2b-86b5-143093f9d21f';
+  
+  // 테스트 채널 키 (토스페이먼츠 - 테스트용)
+  static const String testChannelKey = 'channel-key-4103c2a4-ab14-4707-bdb3-6c6254511ba0';
+  
+  // 기본 채널 키 (실연동 사용)
+  static const String defaultChannelKey = liveChannelKey;
+  
+  // KPN 채널 키 (한국결제네트웍스 - 추후 설정)
+  static const String kpnChannelKey = liveChannelKey; // 현재는 토스페이먼츠 사용
+  
+  // 카카오페이 채널 키 (추후 설정)
+  static const String kakaoPayChannelKey = liveChannelKey; // 현재는 토스페이먼츠 사용
+  
+  // 네이버페이 채널 키 (추후 설정)
+  static const String naverPayChannelKey = liveChannelKey; // 현재는 토스페이먼츠 사용
+  
+  // ============================================================
   
   // 포트원 API 베이스 URL
   static const String portoneApiBaseUrl = 'https://api.portone.io';
+  
+  // ============================================================
+  // 포트원 API 인증 (서버 검증용)
+  // ============================================================
+  
+  // 포트원 API Secret 키 (실결제 검증용)
+  // ⚠️ 중요: 이 키는 절대 외부에 노출되면 안 됩니다!
+  static const String apiSecret = 'N0ISf8dPoea2d3SH3RjZhS6eMJw0Ggpg7C9iNE7f5YY8YlMce4M8j96FJPdn9zLSOmx9U8p31Lezqmp6';
+  
+  // ============================================================
   
   /// 고유한 결제 ID 생성
   /// 포트원 규칙: 대문자, 소문자, 숫자만 허용 (특수문자 불가)
@@ -206,6 +238,7 @@ class PortonePaymentService {
   }) async {
     try {
       // 테스트 채널 키 목록
+      // 실연동 키: channel-key-4ba942b1-404c-4b2b-86b5-143093f9d21f (토스페이먼츠)
       const testChannelKeys = [
         'channel-key-4103c2a4-ab14-4707-bdb3-6c6254511ba0', // 토스페이먼츠 테스트 키
         'channel-key-bc51c093-a46c-45cc-934a-c805007abe3d',
@@ -303,6 +336,115 @@ class PortonePaymentService {
     }
   }
   
+  /// 포트원 API를 통해 실제 결제 상태 검증 (회원권 부여 전 필수!)
+  /// 결제가 실제로 완료되었는지 확인하고, 결제 금액도 검증
+  static Future<Map<String, dynamic>> verifyPaymentFromPortone({
+    required String paymentId,
+    required int expectedAmount,
+  }) async {
+    try {
+      print('🔐 포트원 API로 결제 검증 시작: $paymentId');
+      print('🔐 예상 결제 금액: $expectedAmount원');
+      
+      // 포트원 API 호출
+      final result = await getPaymentFromPortone(
+        paymentId: paymentId,
+        apiSecret: apiSecret,
+      );
+      
+      if (result['success'] != true) {
+        print('❌ 포트원 API 호출 실패: ${result['error']}');
+        return {
+          'success': false,
+          'verified': false,
+          'error': '포트원 API 호출 실패: ${result['error']}',
+        };
+      }
+      
+      final paymentData = result['data'] as Map<String, dynamic>;
+      print('📋 포트원 API 응답: $paymentData');
+      
+      // 결제 상태 확인 (status가 PAID여야 함)
+      final status = paymentData['status'] as String?;
+      if (status != 'PAID') {
+        print('❌ 결제 상태가 PAID가 아닙니다: $status');
+        return {
+          'success': true,
+          'verified': false,
+          'error': '결제가 완료되지 않았습니다. 상태: $status',
+          'status': status,
+        };
+      }
+      
+      // 결제 금액 확인
+      final amount = paymentData['amount'] as Map<String, dynamic>?;
+      final totalAmount = amount?['total'] as int?;
+      final paidAmount = amount?['paid'] as int?;
+      
+      // totalAmount 또는 paidAmount 중 하나라도 예상 금액과 일치해야 함
+      final actualAmount = paidAmount ?? totalAmount;
+      
+      if (actualAmount == null) {
+        print('❌ 결제 금액 정보가 없습니다');
+        return {
+          'success': true,
+          'verified': false,
+          'error': '결제 금액 정보를 확인할 수 없습니다.',
+        };
+      }
+      
+      if (actualAmount != expectedAmount) {
+        print('❌ 결제 금액 불일치: 예상 $expectedAmount원, 실제 $actualAmount원');
+        return {
+          'success': true,
+          'verified': false,
+          'error': '결제 금액이 일치하지 않습니다. 예상: $expectedAmount원, 실제: $actualAmount원',
+          'expectedAmount': expectedAmount,
+          'actualAmount': actualAmount,
+        };
+      }
+      
+      // 결제 시간 확인
+      final paidAt = paymentData['paidAt'] as String?;
+      if (paidAt == null || paidAt.isEmpty) {
+        print('❌ 결제 완료 시간이 없습니다');
+        return {
+          'success': true,
+          'verified': false,
+          'error': '결제 완료 시간을 확인할 수 없습니다.',
+        };
+      }
+      
+      // 채널 정보에서 테스트 여부 확인
+      final channel = paymentData['channel'] as Map<String, dynamic>?;
+      final channelType = channel?['type'] as String?;
+      final isTest = channelType == 'TEST';
+      
+      print('✅ 포트원 결제 검증 성공!');
+      print('   - 상태: $status');
+      print('   - 금액: $actualAmount원');
+      print('   - 결제 시간: $paidAt');
+      print('   - 채널 타입: $channelType (${isTest ? "테스트" : "실결제"})');
+      
+      return {
+        'success': true,
+        'verified': true,
+        'status': status,
+        'amount': actualAmount,
+        'paidAt': paidAt,
+        'isTest': isTest,
+        'paymentData': paymentData,
+      };
+    } catch (e) {
+      print('❌ 결제 검증 중 오류: $e');
+      return {
+        'success': false,
+        'verified': false,
+        'error': '결제 검증 중 오류: $e',
+      };
+    }
+  }
+  
   /// 포트원 채널 정보 조회 (테스트/실제 결제 구분용)
   /// 브라우저 SDK를 통해 채널 정보를 확인하거나 결제 응답에서 확인
   /// 서버 API 호출은 불가능하므로 브라우저 SDK 또는 결제 응답에서만 확인 가능
@@ -321,6 +463,75 @@ class PortonePaymentService {
     };
   }
   
+  /// 포트원 결제 취소 API 호출
+  /// 
+  /// [paymentId] 결제 ID (portone_payment_uid)
+  /// [cancelAmount] 취소 금액 (null이면 전액 취소)
+  /// [cancelReason] 취소 사유 (필수)
+  /// 
+  /// Returns: 취소 결과
+  static Future<Map<String, dynamic>> cancelPayment({
+    required String paymentId,
+    int? cancelAmount,
+    required String cancelReason,
+  }) async {
+    try {
+      print('💳 포트원 결제 취소 요청: $paymentId');
+      print('   - 취소 금액: ${cancelAmount != null ? "${cancelAmount}원" : "전액"}');
+      print('   - 취소 사유: $cancelReason');
+      
+      final Map<String, dynamic> requestBody = {
+        'storeId': storeId,
+        'reason': cancelReason,
+      };
+      
+      // 부분 취소인 경우에만 금액 포함
+      if (cancelAmount != null) {
+        requestBody['amount'] = cancelAmount;
+      }
+      
+      final response = await http.post(
+        Uri.parse('$portoneApiBaseUrl/payments/$paymentId/cancel'),
+        headers: {
+          'Authorization': 'PortOne $apiSecret',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      );
+      
+      print('📋 포트원 취소 응답 상태: ${response.statusCode}');
+      print('📋 포트원 취소 응답 본문: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('✅ 포트원 결제 취소 성공');
+        return {
+          'success': true,
+          'data': responseData,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        final errorType = errorData['type'] ?? 'UnknownError';
+        final errorMessage = errorData['message'] ?? '결제 취소 실패';
+        
+        print('❌ 포트원 결제 취소 실패: $errorType - $errorMessage');
+        
+        return {
+          'success': false,
+          'error': errorMessage,
+          'errorType': errorType,
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      print('❌ 포트원 결제 취소 오류: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
   /// 결제 응답에서 테스트 결제 여부 확인
   /// 포트원 SDK가 API와 통신할 때 채널 정보를 받아옴
   /// 결제 응답에 채널 정보가 포함되어 있음
