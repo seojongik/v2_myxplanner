@@ -56,6 +56,7 @@ class AdOption {
   final String providerId;
   final String adTypeId;
   final String platform; // android, ios, web, all
+  final String appId; // crm_lite_pro, myxplanner, all
   final String? adUnitId;
   final String? testAdUnitId;
   final String? imageUrl;
@@ -70,6 +71,7 @@ class AdOption {
     required this.providerId,
     required this.adTypeId,
     required this.platform,
+    this.appId = 'all',
     this.adUnitId,
     this.testAdUnitId,
     this.imageUrl,
@@ -86,6 +88,7 @@ class AdOption {
       providerId: map['provider_id'] ?? '',
       adTypeId: map['ad_type_id'] ?? '',
       platform: map['platform'] ?? 'all',
+      appId: map['app_id'] ?? 'all',
       adUnitId: map['ad_unit_id'],
       testAdUnitId: map['test_ad_unit_id'],
       imageUrl: map['image_url'],
@@ -321,9 +324,12 @@ class AdService {
     return policy.isActive;
   }
 
+  /// 현재 앱 ID (crm_lite_pro, myxplanner 등)
+  static const String currentAppId = 'myxplanner';
+
   /// 특정 위치에 대한 광고 옵션 가져오기
-  /// 플랫폼에 맞는 옵션을 자동으로 선택
-  Future<AdOption?> getAdOption(String placementId, {String? branchId}) async {
+  /// 플랫폼과 앱에 맞는 옵션을 자동으로 선택
+  Future<AdOption?> getAdOption(String placementId, {String? branchId, String? appId}) async {
     final policy = await getAdPolicy(placementId, branchId: branchId);
     if (policy == null) return null;
     
@@ -332,13 +338,26 @@ class AdService {
       return policy.option;
     }
     
-    // 옵션이 없으면 provider + ad_type으로 찾기
+    // 옵션이 없으면 provider + ad_type + platform + app_id로 찾기
     final platform = _currentPlatform;
+    final targetAppId = appId ?? currentAppId;
     
+    // 1차: 정확한 app_id 매칭
     for (final option in _optionsCache.values) {
       if (option.providerId == policy.providerId &&
           option.adTypeId == policy.adTypeId &&
-          (option.platform == platform || option.platform == 'all')) {
+          (option.platform == platform || option.platform == 'all') &&
+          option.appId == targetAppId) {
+        return option;
+      }
+    }
+    
+    // 2차: app_id가 'all'인 옵션 (공용)
+    for (final option in _optionsCache.values) {
+      if (option.providerId == policy.providerId &&
+          option.adTypeId == policy.adTypeId &&
+          (option.platform == platform || option.platform == 'all') &&
+          option.appId == 'all') {
         return option;
       }
     }
@@ -365,4 +384,5 @@ class AdService {
     _lastFetchTime = null;
   }
 }
+
 
