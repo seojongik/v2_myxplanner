@@ -488,18 +488,20 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // 개발환경 체크 (PC에서만)
+  // 개발환경 체크 (웹 localhost에서만)
   bool _isDevelopment() {
-    // URL 기반 개발 환경 체크 (localhost에서만)
+    // 네이티브 앱(iOS/Android)에서는 절대 관리자 버튼 표시 안함
+    if (!kIsWeb) {
+      return false;
+    }
+    
+    // 웹에서만 localhost/127.0.0.1 체크
     try {
       String currentUrl = Uri.base.toString();
-      // localhost 또는 127.0.0.1에서만 관리자 버튼 표시
       return currentUrl.contains('localhost') ||
              currentUrl.contains('127.0.0.1');
     } catch (e) {
-      // URL을 가져올 수 없는 경우 (네이티브 앱)
-      // Debug 모드이고 네이티브 환경에서만 표시
-      return kDebugMode;
+      return false;
     }
   }
 

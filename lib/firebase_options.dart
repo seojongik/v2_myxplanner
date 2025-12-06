@@ -65,6 +65,7 @@ class DefaultFirebaseOptions {
     projectId: 'autogolfcrm-messaging',
     storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
     iosBundleId: 'com.enabletech.autogolfcrm',
+    iosClientId: '101436238734-bmlocoto647fghs7g646sfv8elkggjae.apps.googleusercontent.com',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(

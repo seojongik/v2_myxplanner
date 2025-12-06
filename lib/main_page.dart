@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'services/api_service.dart';
-import 'services/sms_auth_service.dart';
+import 'services/aligo_sms_service.dart';
 import 'services/chatting/chatting_service.dart';
 import 'member_select_page.dart';
 import 'pages/home/home_page.dart';
@@ -11,7 +11,7 @@ import 'pages/reservation/reservation_page.dart';
 import 'pages/membership/membership_page.dart';
 import 'pages/membership/contract_setup_page.dart';
 import 'pages/account/account_page.dart';
-import 'pages/phone_auth/phone_input_page.dart';
+import 'pages/phone_auth/phone_auth_popup.dart';
 import 'pages/auth/password_change_page.dart';
 import 'widgets/global_chat_button.dart';
 import '../stubs/html_stub.dart' if (dart.library.html) 'dart:html' as html;
@@ -333,7 +333,7 @@ class _MainPageState extends State<MainPage> {
         print('🔑 관리자 계정이지만 일반 로그인 - 인증 프로세스 진행');
       }
       
-      final isVerified = await SmsAuthService.isPhoneVerified(memberPhone);
+      final isVerified = await AligoSmsService.isPhoneVerified(memberPhone);
       
       if (!isVerified && mounted) {
         _showPhoneAuthGuide();
@@ -406,72 +406,15 @@ class _MainPageState extends State<MainPage> {
     return false;
   }
   
-  // 전화번호 인증 안내 다이얼로그
+  // 전화번호 인증 - 전체화면 팝업 (전체 플로우 포함)
   void _showPhoneAuthGuide() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        showDialog(
+        PhoneAuthPopup.show(
           context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.security,
-                      color: Colors.orange.shade700,
-                      size: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    '전화번호 인증이 필요합니다',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '보안을 위해 등록된 전화번호\n인증을 완료해주세요.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('나중에'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    Navigator.pushNamed(context, '/phone-auth');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('인증하기'),
-                ),
-              ],
-            );
+          onComplete: () {
+            // 인증 완료 후 비밀번호 변경 확인
+            _checkDefaultPassword();
           },
         );
       }
@@ -796,4 +739,4 @@ class NavigationItem {
     required this.selectedIcon,
     required this.label,
   });
-} 
+}

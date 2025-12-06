@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/tab_design_service.dart';
 import '../../services/api_service.dart';
-import 'password/password_account_page.dart';
 import 'profile/profile_account_page.dart';
 import 'family_relation/family_relation_account_page.dart';
-import 'message_agreement/message_agreement_account_page.dart';
 import 'policy/policy_account_page.dart';
 import 'notification_settings/notification_settings_account_page.dart';
 
@@ -29,12 +27,6 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
   
   final List<Map<String, dynamic>> accountTabs = [
     {
-      'title': '비밀번호',
-      'type': 'password',
-      'icon': Icons.lock,
-      'color': Color(0xFF00A86B),
-    },
-    {
       'title': '개인정보',
       'type': 'profile',
       'icon': Icons.person,
@@ -47,16 +39,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
       'color': Color(0xFF2196F3),
     },
     {
-      'title': '메시지 수신동의',
-      'type': 'message_agreement',
-      'icon': Icons.notifications_active,
-      'color': Color(0xFF6B73FF),
-    },
-    {
       'title': '알림 설정',
       'type': 'notification_settings',
-      'icon': Icons.settings,
-      'color': Color(0xFF00BCD4),
+      'icon': Icons.notifications,
+      'color': Color(0xFF6B73FF),
     },
     {
       'title': '약관 및 정책',
@@ -83,13 +69,6 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     final String type = tab['type'];
 
     switch (type) {
-      case 'password':
-        return PasswordAccountContent(
-          isAdminMode: widget.isAdminMode,
-          selectedMember: widget.selectedMember,
-          branchId: widget.branchId,
-        );
-
       case 'profile':
         return ProfileAccountContent(
           isAdminMode: widget.isAdminMode,
@@ -99,13 +78,6 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
 
       case 'family_relation':
         return FamilyRelationAccountContent(
-          isAdminMode: widget.isAdminMode,
-          selectedMember: widget.selectedMember,
-          branchId: widget.branchId,
-        );
-
-      case 'message_agreement':
-        return MessageAgreementAccountContent(
           isAdminMode: widget.isAdminMode,
           selectedMember: widget.selectedMember,
           branchId: widget.branchId,

@@ -30,11 +30,11 @@ dependencies:
   # State Management
   provider: ^6.1.2
   
-  # Firebase (최신 버전으로 업데이트 - 채널 에러 해결)
+  # Firebase (버전 호환성 맞춤 - crm과 동일)
   firebase_core: ^4.2.1
+  firebase_auth: ^6.0.0
   cloud_firestore: ^6.1.0
-  firebase_core_web: ^3.3.0
-  firebase_messaging: ^16.0.4
+  firebase_messaging: ^16.0.0
   
   # Country Picker (전화번호 입력용)
   country_picker: ^2.0.26
