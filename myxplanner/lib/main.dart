@@ -8,8 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'firebase_options.dart';
-import 'services/sms_auth_service.dart';
-import 'pages/phone_auth/phone_input_page.dart';
+import 'services/aligo_sms_service.dart';
 import 'login_page.dart';
 import 'main_page.dart';
 import 'login_branch_select.dart';
@@ -305,7 +304,7 @@ class MyGolfPlannerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SmsAuthService()),
+        ChangeNotifierProvider(create: (_) => AligoSmsService()),
         ChangeNotifierProvider(create: (_) => ChatNotificationService()),
       ],
       child: MaterialApp(
@@ -386,7 +385,6 @@ class MyGolfPlannerApp extends StatelessWidget {
             branchId: args?['branchId'],
           );
         },
-        '/phone-auth': (context) => PhoneInputPage(),
         '/crm-member': (context) {
           return CrmMemberRedirectPage();
         },

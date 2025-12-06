@@ -27,22 +27,9 @@ class ApiService {
     'Accept': 'application/json',
   };
   
-  // SMS 발송 (Supabase로 이전 필요 - 현재 미구현)
-  static Future<Map<String, dynamic>> sendSMS({
-    required String phoneNumber,
-    required String message,
-  }) async {
-    // TODO: Supabase Edge Function으로 SMS 발송 구현 필요
-    print('⚠️ SMS 발송 기능은 현재 미구현 상태입니다.');
-    print('📱 발송 대상: $phoneNumber');
-    print('📝 메시지: $message');
-    
-    // 현재는 성공으로 처리 (실제 발송은 되지 않음)
-    return {
-      'success': true,
-      'message': 'SMS 발송 기능 미구현 (로그만 출력됨)',
-    };
-  }
+  // ========== SMS 발송은 알리고 SMS 서비스 사용 ==========
+  // AligoSmsService에서 Supabase Edge Function을 통해 알리고 API를 사용합니다.
+  // 별도의 SMS API 호출이 필요하지 않습니다.
   
   // 전역 상태 관리
   static String? _currentBranchId;

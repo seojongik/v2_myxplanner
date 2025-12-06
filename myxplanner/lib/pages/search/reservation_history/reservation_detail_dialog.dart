@@ -384,11 +384,14 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                   ),
                   const SizedBox(height: 16),
                   
-                  // 예약 상세 정보
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
+                  // 예약 상세 정보 (반응형 레이아웃)
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 280;
+                      
+                      if (isNarrow) {
+                        // 세로 배치
+                        return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
@@ -408,14 +411,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                                 color: Colors.grey[800],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                            const SizedBox(height: 16),
                             Text(
                               '예약 시간',
                               style: TextStyle(
@@ -434,9 +430,64 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ],
+                        );
+                      } else {
+                        // 가로 배치
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '예약 날짜',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    DateFormat('yyyy년 M월 d일 (E)', 'ko').format(DateTime.parse(widget.reservation['date'])),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '예약 시간',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${widget.reservation['startTime']} - ${widget.reservation['endTime']}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                    },
                   ),
                 ],
               ),
@@ -506,18 +557,22 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                             ),
                           ),
                         ),
-                        // 취소 조건 주석과 물음표 버튼
+                        // 취소 조건 주석과 물음표 버튼 (오버플로우 방지)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              _currentTabPolicyInfo?['currentStatus'] ?? '취소 조건을 확인하는 중...',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
+                            Flexible(
+                              child: Text(
+                                _currentTabPolicyInfo?['currentStatus'] ?? '취소 조건을 확인하는 중...',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 2,
                               ),
-                              textAlign: TextAlign.center,
                             ),
                             const SizedBox(width: 8),
                             GestureDetector(
@@ -553,83 +608,160 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                   
                   const SizedBox(height: 20),
                   
-                  // 잔액 정보
-                  Row(
-                    children: [
-                      // 환불 전 잔액
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  // 잔액 정보 (반응형 레이아웃)
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 280;
+                      
+                      if (isNarrow) {
+                        // 세로 배치
+                        return Column(
                           children: [
-                            Text(
-                              '환불 전 ${tabInfo['key'] == 'credit' ? '잔액' : '시간'}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
+                            // 환불 전 잔액
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '환불 전 ${tabInfo['key'] == 'credit' ? '잔액' : '시간'}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '${NumberFormat('#,###').format(_currentTabBalance ?? 0)}${tabInfo['key'] == 'credit' ? '원' : '분'}',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            // 화살표 (세로)
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.blue[400]!, Colors.green[400]!],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                Icons.arrow_downward,
+                                color: Colors.white,
+                                size: 20,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${NumberFormat('#,###').format(_currentTabBalance ?? 0)}${tabInfo['key'] == 'credit' ? '원' : '분'}',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.grey[800],
+                            const SizedBox(height: 12),
+                            // 환불 후 잔액
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '환불 후 ${tabInfo['key'] == 'credit' ? '잔액' : '시간'}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '${NumberFormat('#,###').format((_currentTabBalance ?? 0) + (_currentTabPolicyInfo?['refundAmount'] ?? 0))}${tabInfo['key'] == 'credit' ? '원' : '분'}',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      } else {
+                        // 가로 배치
+                        return Row(
+                          children: [
+                            // 환불 전 잔액
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '환불 전 ${tabInfo['key'] == 'credit' ? '잔액' : '시간'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${NumberFormat('#,###').format(_currentTabBalance ?? 0)}${tabInfo['key'] == 'credit' ? '원' : '분'}',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // 그라데이션 화살표
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.blue[400]!, Colors.green[400]!],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Icon(
+                                  Icons.arrow_forward,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            // 환불 후 잔액
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '환불 후 ${tabInfo['key'] == 'credit' ? '잔액' : '시간'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${NumberFormat('#,###').format((_currentTabBalance ?? 0) + (_currentTabPolicyInfo?['refundAmount'] ?? 0))}${tabInfo['key'] == 'credit' ? '원' : '분'}',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.green[700],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      
-                      // 그라데이션 화살표
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.blue[400]!, Colors.green[400]!],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Icon(
-                            Icons.arrow_forward,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      
-                      // 환불 후 잔액
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '환불 후 ${tabInfo['key'] == 'credit' ? '잔액' : '시간'}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${NumberFormat('#,###').format((_currentTabBalance ?? 0) + (_currentTabPolicyInfo?['refundAmount'] ?? 0))}${tabInfo['key'] == 'credit' ? '원' : '분'}',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.green[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                        );
+                      }
+                    },
                   ),
                 ],
               ),
