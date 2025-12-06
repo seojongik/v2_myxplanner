@@ -281,7 +281,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
             SizedBox(width: 8),
-            Text('환불 확인'),
+            Text('결제취소 확인'),
           ],
         ),
         content: Column(
@@ -289,7 +289,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '다음 결제를 환불하시겠습니까?',
+              '다음 결제를 취소하시겠습니까?',
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 16),
@@ -308,7 +308,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '환불 금액: ${_numberFormat.format(paymentAmount)}원',
+                    '취소 금액: ${_numberFormat.format(paymentAmount)}원',
                     style: TextStyle(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
@@ -320,7 +320,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
             ),
             SizedBox(height: 16),
             Text(
-              '⚠️ 환불 시 해당 회원권의 모든 잔액이 0원으로 초기화됩니다.',
+              '⚠️ 결제취소 시 해당 회원권의 모든 잔액이 0원으로 초기화됩니다.',
               style: TextStyle(
                 color: Colors.red[700],
                 fontSize: 13,
@@ -331,7 +331,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('취소'),
+            child: Text('닫기'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -339,7 +339,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: Text('환불하기'),
+            child: Text('결제취소'),
           ),
         ],
       ),
@@ -741,6 +741,7 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
     final orderName = payment['order_name'] as String? ?? '회원권';
     final paidAt = payment['payment_paid_at'] as String?;
     final paymentMethod = payment['payment_method'] as String? ?? '';
+    final paymentUid = payment['portone_payment_uid'] as String? ?? '';
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -822,6 +823,8 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
                 _buildDetailRow('결제 상태', _getStatusText(status), _getStatusColor(status)),
                 _buildDetailRow('결제 수단', _getPaymentMethodText(paymentMethod)),
                 _buildDetailRow('결제 일시', _formatDate(paidAt)),
+                if (paymentUid.isNotEmpty)
+                  _buildDetailRow('거래번호', paymentUid, null, true),
               ],
             ),
           ),
@@ -871,25 +874,25 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
               ),
             )
           else if (_isRefundable && status == 'PAID')
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: _showRefundDialog,
-                icon: Icon(Icons.replay, size: 20),
-                label: Text(
-                  '환불하기',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: _showRefundDialog,
+                  icon: Icon(Icons.cancel_outlined, size: 20),
+                  label: Text(
+                    '결제취소',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-              ),
-            )
+              )
           else if (status == 'CANCELLED')
             Container(
               width: double.infinity,
@@ -914,31 +917,27 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
                 ],
               ),
             )
-          else if (!_isRefundable && _refundEligibility != null)
+          else if (!_isRefundable && status == 'PAID')
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.orange[50],
+                color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange[200]!),
+                border: Border.all(color: Colors.grey[300]!),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _refundEligibility!['reason']?.toString() ?? '환불이 불가능합니다',
-                      style: TextStyle(
-                        color: Colors.orange[700],
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                '사용중인 회원권은 결제취소가 불가합니다.\n센터로 문의주세요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                  height: 1.5,
+                ),
               ),
             ),
+          // 하단 네비게이션 바 가림 방지 여백
+          SizedBox(height: 100),
         ],
       ),
     );
@@ -994,6 +993,13 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
     // 구성상품 존재 여부 확인
     final hasServices = credit > 0 || lsMin > 0 || tsMin > 0 || games > 0 || termMonth > 0;
 
+    // 각 상품별 사용 여부 (refundEligibility에서 가져옴)
+    final creditUsed = _refundEligibility?['credit_used'] == true;
+    final lessonUsed = _refundEligibility?['lesson_used'] == true;
+    final timepassUsed = _refundEligibility?['timepass_used'] == true;
+    final gameUsed = _refundEligibility?['game_used'] == true;
+    final termUsed = _refundEligibility?['term_used'] == true;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1008,18 +1014,68 @@ class _PaymentHistorySearchContentState extends State<PaymentHistorySearchConten
         if (hasServices)
           Divider(height: 24, color: Colors.grey[300]),
         
-        // 구성상품 목록
+        // 구성상품 목록 (사용 여부 표시)
         if (credit > 0)
-          _buildDetailRow('크레딧', '${_numberFormat.format(credit)}원'),
+          _buildServiceRow('크레딧', '${_numberFormat.format(credit)}원', creditUsed),
         if (lsMin > 0)
-          _buildDetailRow('레슨권', '${_numberFormat.format(lsMin)}분'),
+          _buildServiceRow('레슨권', '${_numberFormat.format(lsMin)}분', lessonUsed),
         if (tsMin > 0)
-          _buildDetailRow('타석시간', '${_numberFormat.format(tsMin)}분'),
+          _buildServiceRow('타석시간', '${_numberFormat.format(tsMin)}분', timepassUsed),
         if (games > 0)
-          _buildDetailRow('스크린게임', '${_numberFormat.format(games)}회'),
+          _buildServiceRow('스크린게임', '${_numberFormat.format(games)}회', gameUsed),
         if (termMonth > 0)
-          _buildDetailRow('기간권', '${termMonth}개월'),
+          _buildServiceRow('기간권', '${termMonth}개월', termUsed),
       ],
+    );
+  }
+
+  /// 서비스 행 빌드 (사용 여부 포함)
+  Widget _buildServiceRow(String label, String value, bool isUsed) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          Row(
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+              SizedBox(width: 8),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isUsed ? Colors.red[50] : Colors.green[50],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isUsed ? Colors.red[200]! : Colors.green[200]!,
+                  ),
+                ),
+                child: Text(
+                  isUsed ? '사용' : '미사용',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isUsed ? Colors.red[700] : Colors.green[700],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

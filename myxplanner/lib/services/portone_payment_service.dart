@@ -1,9 +1,15 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 
 /// 포트원 결제 서비스
+/// 
+/// ⚠️ 보안 주의사항:
+/// - 결제 검증 및 취소는 반드시 Supabase Edge Function을 통해 처리합니다.
+/// - API Secret은 Edge Function의 환경 변수로만 관리됩니다.
+/// - 클라이언트 코드에는 절대 API Secret을 포함하지 않습니다.
 class PortonePaymentService {
   // 포트원 상점 ID
   static const String storeId = 'store-58c8f5b8-6bc6-4efb-8dd0-8a98475a4246';
@@ -33,16 +39,11 @@ class PortonePaymentService {
   
   // ============================================================
   
-  // 포트원 API 베이스 URL
-  static const String portoneApiBaseUrl = 'https://api.portone.io';
+  // Supabase Edge Function 이름
+  static const String _edgeFunctionName = 'portone-payment';
   
-  // ============================================================
-  // 포트원 API 인증 (서버 검증용)
-  // ============================================================
-  
-  // 포트원 API Secret 키 (실결제 검증용)
-  // ⚠️ 중요: 이 키는 절대 외부에 노출되면 안 됩니다!
-  static const String apiSecret = 'N0ISf8dPoea2d3SH3RjZhS6eMJw0Ggpg7C9iNE7f5YY8YlMce4M8j96FJPdn9zLSOmx9U8p31Lezqmp6';
+  // Supabase 클라이언트 (Edge Function 호출용)
+  static SupabaseClient get _supabase => Supabase.instance.client;
   
   // ============================================================
   
@@ -303,32 +304,35 @@ class PortonePaymentService {
     }
   }
   
-  /// 포트원 API를 통해 결제 정보 조회 (서버에서 검증용)
+  /// Supabase Edge Function을 통해 결제 정보 조회
+  /// 
+  /// ⚠️ 보안: API Secret은 Edge Function 내에서만 사용됩니다.
   static Future<Map<String, dynamic>> getPaymentFromPortone({
     required String paymentId,
-    required String apiSecret,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$portoneApiBaseUrl/payments/$paymentId'),
-        headers: {
-          'Authorization': 'PortOne $apiSecret',
-          'Content-Type': 'application/json',
+      print('📋 [Edge Function] 결제 정보 조회 요청: $paymentId');
+      
+      final response = await _supabase.functions.invoke(
+        _edgeFunctionName,
+        body: {
+          'action': 'get',
+          'paymentId': paymentId,
         },
       );
       
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'data': jsonDecode(response.body),
-        };
-      } else {
+      if (response.status != 200) {
+        print('❌ Edge Function 호출 실패: ${response.status}');
         return {
           'success': false,
-          'error': '결제 조회 실패: ${response.statusCode}',
+          'error': '결제 조회 실패: ${response.status}',
         };
       }
+      
+      final data = response.data as Map<String, dynamic>;
+      return data;
     } catch (e) {
+      print('❌ 결제 정보 조회 오류: $e');
       return {
         'success': false,
         'error': e.toString(),
@@ -336,105 +340,49 @@ class PortonePaymentService {
     }
   }
   
-  /// 포트원 API를 통해 실제 결제 상태 검증 (회원권 부여 전 필수!)
+  /// Supabase Edge Function을 통해 결제 상태 검증 (회원권 부여 전 필수!)
   /// 결제가 실제로 완료되었는지 확인하고, 결제 금액도 검증
+  /// 
+  /// ⚠️ 보안: API Secret은 Edge Function 내에서만 사용됩니다.
   static Future<Map<String, dynamic>> verifyPaymentFromPortone({
     required String paymentId,
     required int expectedAmount,
   }) async {
     try {
-      print('🔐 포트원 API로 결제 검증 시작: $paymentId');
+      print('🔐 [Edge Function] 결제 검증 요청: $paymentId');
       print('🔐 예상 결제 금액: $expectedAmount원');
       
-      // 포트원 API 호출
-      final result = await getPaymentFromPortone(
-        paymentId: paymentId,
-        apiSecret: apiSecret,
+      final response = await _supabase.functions.invoke(
+        _edgeFunctionName,
+        body: {
+          'action': 'verify',
+          'paymentId': paymentId,
+          'expectedAmount': expectedAmount,
+        },
       );
       
-      if (result['success'] != true) {
-        print('❌ 포트원 API 호출 실패: ${result['error']}');
+      if (response.status != 200) {
+        print('❌ Edge Function 호출 실패: ${response.status}');
         return {
           'success': false,
           'verified': false,
-          'error': '포트원 API 호출 실패: ${result['error']}',
+          'error': 'Edge Function 호출 실패: ${response.status}',
         };
       }
       
-      final paymentData = result['data'] as Map<String, dynamic>;
-      print('📋 포트원 API 응답: $paymentData');
+      final data = response.data as Map<String, dynamic>;
       
-      // 결제 상태 확인 (status가 PAID여야 함)
-      final status = paymentData['status'] as String?;
-      if (status != 'PAID') {
-        print('❌ 결제 상태가 PAID가 아닙니다: $status');
-        return {
-          'success': true,
-          'verified': false,
-          'error': '결제가 완료되지 않았습니다. 상태: $status',
-          'status': status,
-        };
+      if (data['verified'] == true) {
+        print('✅ 포트원 결제 검증 성공!');
+        print('   - 상태: ${data['status']}');
+        print('   - 금액: ${data['amount']}원');
+        print('   - 결제 시간: ${data['paidAt']}');
+        print('   - 채널 타입: ${data['isTest'] == true ? "테스트" : "실결제"}');
+      } else {
+        print('❌ 결제 검증 실패: ${data['error']}');
       }
       
-      // 결제 금액 확인
-      final amount = paymentData['amount'] as Map<String, dynamic>?;
-      final totalAmount = amount?['total'] as int?;
-      final paidAmount = amount?['paid'] as int?;
-      
-      // totalAmount 또는 paidAmount 중 하나라도 예상 금액과 일치해야 함
-      final actualAmount = paidAmount ?? totalAmount;
-      
-      if (actualAmount == null) {
-        print('❌ 결제 금액 정보가 없습니다');
-        return {
-          'success': true,
-          'verified': false,
-          'error': '결제 금액 정보를 확인할 수 없습니다.',
-        };
-      }
-      
-      if (actualAmount != expectedAmount) {
-        print('❌ 결제 금액 불일치: 예상 $expectedAmount원, 실제 $actualAmount원');
-        return {
-          'success': true,
-          'verified': false,
-          'error': '결제 금액이 일치하지 않습니다. 예상: $expectedAmount원, 실제: $actualAmount원',
-          'expectedAmount': expectedAmount,
-          'actualAmount': actualAmount,
-        };
-      }
-      
-      // 결제 시간 확인
-      final paidAt = paymentData['paidAt'] as String?;
-      if (paidAt == null || paidAt.isEmpty) {
-        print('❌ 결제 완료 시간이 없습니다');
-        return {
-          'success': true,
-          'verified': false,
-          'error': '결제 완료 시간을 확인할 수 없습니다.',
-        };
-      }
-      
-      // 채널 정보에서 테스트 여부 확인
-      final channel = paymentData['channel'] as Map<String, dynamic>?;
-      final channelType = channel?['type'] as String?;
-      final isTest = channelType == 'TEST';
-      
-      print('✅ 포트원 결제 검증 성공!');
-      print('   - 상태: $status');
-      print('   - 금액: $actualAmount원');
-      print('   - 결제 시간: $paidAt');
-      print('   - 채널 타입: $channelType (${isTest ? "테스트" : "실결제"})');
-      
-      return {
-        'success': true,
-        'verified': true,
-        'status': status,
-        'amount': actualAmount,
-        'paidAt': paidAt,
-        'isTest': isTest,
-        'paymentData': paymentData,
-      };
+      return data;
     } catch (e) {
       print('❌ 결제 검증 중 오류: $e');
       return {
@@ -447,27 +395,29 @@ class PortonePaymentService {
   
   /// 포트원 채널 정보 조회 (테스트/실제 결제 구분용)
   /// 브라우저 SDK를 통해 채널 정보를 확인하거나 결제 응답에서 확인
-  /// 서버 API 호출은 불가능하므로 브라우저 SDK 또는 결제 응답에서만 확인 가능
+  /// 
+  /// 참고: 채널 키 자체로는 테스트/실제 여부를 판별할 수 없습니다.
+  /// 결제 응답에서 채널 정보를 확인하거나 isTestPaymentFromResponse 함수를 사용하세요.
   static Future<Map<String, dynamic>> getChannelInfo({
     required String channelKey,
-    String? apiSecret, // 사용하지 않음 (서버 API 호출 불가)
   }) async {
-    // 서버 API 호출이 불가능하므로 브라우저 SDK를 통해 확인하거나
+    // 채널 키만으로는 테스트/실제 여부를 판별할 수 없음
     // 결제 응답에서 확인하는 방법만 사용 가능
-    // 채널 키 자체로는 테스트/실제 여부를 판별할 수 없음
     
     return {
       'success': false,
-      'error': '서버 API 호출이 불가능합니다. 결제 응답에서 채널 정보를 확인하세요.',
+      'error': '채널 키만으로는 테스트/실제 여부를 판별할 수 없습니다. 결제 응답에서 채널 정보를 확인하세요.',
       'isTest': null,
     };
   }
   
-  /// 포트원 결제 취소 API 호출
+  /// Supabase Edge Function을 통해 결제 취소
   /// 
   /// [paymentId] 결제 ID (portone_payment_uid)
   /// [cancelAmount] 취소 금액 (null이면 전액 취소)
   /// [cancelReason] 취소 사유 (필수)
+  /// 
+  /// ⚠️ 보안: API Secret은 Edge Function 내에서만 사용됩니다.
   /// 
   /// Returns: 취소 결과
   static Future<Map<String, dynamic>> cancelPayment({
@@ -476,53 +426,37 @@ class PortonePaymentService {
     required String cancelReason,
   }) async {
     try {
-      print('💳 포트원 결제 취소 요청: $paymentId');
+      print('💳 [Edge Function] 결제 취소 요청: $paymentId');
       print('   - 취소 금액: ${cancelAmount != null ? "${cancelAmount}원" : "전액"}');
       print('   - 취소 사유: $cancelReason');
       
-      final Map<String, dynamic> requestBody = {
-        'storeId': storeId,
-        'reason': cancelReason,
-      };
-      
-      // 부분 취소인 경우에만 금액 포함
-      if (cancelAmount != null) {
-        requestBody['amount'] = cancelAmount;
-      }
-      
-      final response = await http.post(
-        Uri.parse('$portoneApiBaseUrl/payments/$paymentId/cancel'),
-        headers: {
-          'Authorization': 'PortOne $apiSecret',
-          'Content-Type': 'application/json',
+      final response = await _supabase.functions.invoke(
+        _edgeFunctionName,
+        body: {
+          'action': 'cancel',
+          'paymentId': paymentId,
+          'cancelAmount': cancelAmount,
+          'cancelReason': cancelReason,
         },
-        body: jsonEncode(requestBody),
       );
       
-      print('📋 포트원 취소 응답 상태: ${response.statusCode}');
-      print('📋 포트원 취소 응답 본문: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        print('✅ 포트원 결제 취소 성공');
-        return {
-          'success': true,
-          'data': responseData,
-        };
-      } else {
-        final errorData = jsonDecode(response.body);
-        final errorType = errorData['type'] ?? 'UnknownError';
-        final errorMessage = errorData['message'] ?? '결제 취소 실패';
-        
-        print('❌ 포트원 결제 취소 실패: $errorType - $errorMessage');
-        
+      if (response.status != 200) {
+        print('❌ Edge Function 호출 실패: ${response.status}');
         return {
           'success': false,
-          'error': errorMessage,
-          'errorType': errorType,
-          'statusCode': response.statusCode,
+          'error': 'Edge Function 호출 실패: ${response.status}',
         };
       }
+      
+      final data = response.data as Map<String, dynamic>;
+      
+      if (data['success'] == true) {
+        print('✅ 포트원 결제 취소 성공');
+      } else {
+        print('❌ 포트원 결제 취소 실패: ${data['error']}');
+      }
+      
+      return data;
     } catch (e) {
       print('❌ 포트원 결제 취소 오류: $e');
       return {

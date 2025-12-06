@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'login_branch_select.dart';
+import 'login_group_master_option.dart';
 import 'main_page.dart';
 import 'services/api_service.dart';
 import 'services/login_storage_service.dart';
@@ -344,16 +345,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           await FCMService.updateTokenAfterLogin();
         }
         
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainPage(
-              isAdminMode: false,
-              selectedMember: matchingMember,
-              branchId: branchId,
-            ),
-          ),
-        );
+        // 그룹 마스터 확인 후 계정 선택 또는 메인으로 이동
+        await _checkGroupMasterAndProceed(branchId, branchData, matchingMember);
       } else {
         print('다중 지점 로그인 - Branch IDs: $branchIds');
         
@@ -410,6 +403,89 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         _isLoading = false;
       });
     }
+  }
+
+  // 그룹 마스터 확인 후 계정 선택 또는 메인으로 이동
+  Future<void> _checkGroupMasterAndProceed(
+    String branchId,
+    Map<String, dynamic> branchData,
+    Map<String, dynamic> memberData,
+  ) async {
+    try {
+      final currentMemberId = memberData['member_id']?.toString();
+      
+      if (currentMemberId == null) {
+        _navigateToMain(branchId, memberData);
+        return;
+      }
+
+      print('그룹 마스터 권한 확인 중... member_id: $currentMemberId, branch_id: $branchId');
+      
+      // v2_group 테이블에서 _is_master 컬럼에 현재 회원 ID가 있는지 확인
+      final response = await ApiService.getData(
+        table: 'v2_group',
+        where: [
+          {
+            'field': '_is_master',
+            'operator': '=',
+            'value': currentMemberId,
+          },
+          {
+            'field': 'branch_id',
+            'operator': '=',
+            'value': branchId,
+          }
+        ],
+      );
+
+      print('v2_group 조회 결과: ${response.length}건');
+      
+      if (response.isNotEmpty) {
+        // 그룹 멤버가 있다면 계정 선택 페이지로 이동
+        print('그룹 마스터 권한 확인됨. 계정 선택 페이지로 이동');
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => LoginGroupMasterOptionPage(
+              memberData: memberData,
+              branchData: branchData,
+              branchId: branchId,
+            ),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: Duration(milliseconds: 300),
+          ),
+        );
+      } else {
+        // 그룹 멤버가 없다면 바로 메인으로 이동
+        print('그룹 마스터 권한 없음. 바로 메인으로 이동');
+        _navigateToMain(branchId, memberData);
+      }
+      
+    } catch (e) {
+      print('그룹 마스터 권한 확인 오류: $e');
+      // 오류 발생 시 바로 메인으로 이동
+      _navigateToMain(branchId, memberData);
+    }
+  }
+
+  // 메인 페이지로 이동
+  void _navigateToMain(String branchId, Map<String, dynamic> memberData) {
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => MainPage(
+          isAdminMode: false,
+          selectedMember: memberData,
+          branchId: branchId,
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: Duration(milliseconds: 300),
+      ),
+    );
   }
 
   // 개발환경 체크 (PC에서만)

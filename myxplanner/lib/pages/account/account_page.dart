@@ -3,6 +3,7 @@ import '../../services/tab_design_service.dart';
 import '../../services/api_service.dart';
 import 'password/password_account_page.dart';
 import 'profile/profile_account_page.dart';
+import 'family_relation/family_relation_account_page.dart';
 import 'message_agreement/message_agreement_account_page.dart';
 import 'policy/policy_account_page.dart';
 import 'notification_settings/notification_settings_account_page.dart';
@@ -38,6 +39,12 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
       'type': 'profile',
       'icon': Icons.person,
       'color': Color(0xFFFF8C00),
+    },
+    {
+      'title': '관계관리',
+      'type': 'family_relation',
+      'icon': Icons.family_restroom,
+      'color': Color(0xFF2196F3),
     },
     {
       'title': '메시지 수신동의',
@@ -85,6 +92,13 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
 
       case 'profile':
         return ProfileAccountContent(
+          isAdminMode: widget.isAdminMode,
+          selectedMember: widget.selectedMember,
+          branchId: widget.branchId,
+        );
+
+      case 'family_relation':
+        return FamilyRelationAccountContent(
           isAdminMode: widget.isAdminMode,
           selectedMember: widget.selectedMember,
           branchId: widget.branchId,
