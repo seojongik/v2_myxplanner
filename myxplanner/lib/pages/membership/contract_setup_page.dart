@@ -904,8 +904,8 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
       final contractHistoryId = _safeParseInt(historyResponse['insertId']);
       debugPrint('✅ 회원권 저장 완료 - ID: $contractHistoryId');
       
-      // 결제 정보에 contractHistoryId 업데이트
-      if (paymentRecordId != null) {
+      // 결제 정보에 contractHistoryId 업데이트 (portone_payment_uid로 찾아서 업데이트)
+      if (contractHistoryId > 0) {
         await ApiService.updateData(
           table: 'v2_portone_payments',
           data: {'contract_history_id': contractHistoryId},
@@ -913,7 +913,9 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
             {'field': 'portone_payment_uid', 'operator': '=', 'value': portonePaymentId}
           ],
         );
-        debugPrint('✅ 결제 정보에 회원권 ID 연결 완료');
+        debugPrint('✅ 결제 정보에 회원권 ID 연결 완료 (contract_history_id: $contractHistoryId)');
+      } else {
+        debugPrint('⚠️ contract_history_id가 유효하지 않아 결제 정보 업데이트 건너뜀');
       }
       
       debugPrint('============================================================');

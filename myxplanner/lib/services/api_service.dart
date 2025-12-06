@@ -2333,15 +2333,16 @@ class ApiService {
       final today = DateTime.now();
       final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       
-      // 1. v2_bill_term에서 유효한 기간권 조회 (contract_term_month_expiry_date가 오늘 이후)
+      // 1. v2_bill_term에서 기간권 조회 (contract_history_id별 최신 레코드 기준)
+      // 환불 시 만료일이 오늘로 당겨지므로, 만료일 기준으로 유효 여부 판단
       // GROUP BY를 사용할 수 없으므로 모든 레코드를 가져와서 contract_history_id별로 최신 데이터 추출
       final billTerms = await getData(
         table: 'v2_bill_term',
-        fields: ['bill_term_id', 'contract_history_id', 'contract_term_month_expiry_date', 'bill_text', 'term_startdate', 'term_enddate'],
+        fields: ['bill_term_id', 'contract_history_id', 'contract_term_month_expiry_date', 'bill_text', 'term_startdate', 'term_enddate', 'bill_status'],
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
-          {'field': 'contract_term_month_expiry_date', 'operator': '>=', 'value': todayStr},
+          // 만료일 필터 없이 모든 레코드 조회 후 최신 레코드 기준으로 판단
         ],
         orderBy: [
           {'field': 'bill_term_id', 'direction': 'DESC'}
@@ -2356,7 +2357,6 @@ class ApiService {
       }
       
       // 2. contract_history_id별로 가장 최신 bill_term_id 기준으로 정보 추출
-      final validContractHistoryIds = <String>{};
       final contractInfo = <String, Map<String, dynamic>>{};
       final contractBillTermIds = <String, int>{}; // contract_history_id별 최대 bill_term_id 추적
       
@@ -2381,7 +2381,6 @@ class ApiService {
               print('기간권 정보 업데이트 (최신 bill_term_id: $billTermId) - contract_history_id: $contractHistoryId, 만료일: $expiryDate');
             }
           } else {
-            validContractHistoryIds.add(contractHistoryId);
             contractInfo[contractHistoryId] = {
               'contract_history_id': contractHistoryId,
               'expiry_date': expiryDate,
@@ -2390,13 +2389,36 @@ class ApiService {
               'term_enddate': term['term_enddate'],
             };
             contractBillTermIds[contractHistoryId] = billTermId;
-            print('유효한 기간권 발견 (bill_term_id: $billTermId) - contract_history_id: $contractHistoryId, 만료일: $expiryDate');
+            print('기간권 레코드 발견 (bill_term_id: $billTermId) - contract_history_id: $contractHistoryId, 만료일: $expiryDate');
+          }
+        }
+      }
+      
+      // 3. 최신 레코드 기준으로 만료일이 오늘 이후인 것만 필터링
+      final validContractHistoryIds = <String>{};
+      for (final entry in contractInfo.entries) {
+        final contractHistoryId = entry.key;
+        final expiryDateStr = entry.value['expiry_date']?.toString();
+        
+        if (expiryDateStr != null && expiryDateStr.isNotEmpty) {
+          try {
+            final expiryDate = DateTime.parse(expiryDateStr);
+            final todayDate = DateTime.parse(todayStr);
+            
+            if (!expiryDate.isBefore(todayDate)) {
+              validContractHistoryIds.add(contractHistoryId);
+              print('유효한 기간권: contract_history_id=$contractHistoryId, 만료일=$expiryDateStr (오늘=$todayStr)');
+            } else {
+              print('만료된 기간권 제외: contract_history_id=$contractHistoryId, 만료일=$expiryDateStr (오늘=$todayStr)');
+            }
+          } catch (e) {
+            print('만료일 파싱 오류: $e');
           }
         }
       }
       
       if (validContractHistoryIds.isEmpty) {
-        print('유효한 contract_history_id가 없음');
+        print('유효한 contract_history_id가 없음 (만료일 필터링 후)');
         return [];
       }
       
