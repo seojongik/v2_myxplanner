@@ -321,14 +321,19 @@ class _MainPageState extends State<MainPage> {
         return;
       }
       
+      // 전화번호가 없는 회원(주니어, 대리 예약 회원 등)은 인증 스킵
+      final memberPhone = currentUser['member_phone']?.toString();
+      if (memberPhone == null || memberPhone.isEmpty || memberPhone == 'null') {
+        print('📱 전화번호 없는 회원 - 인증 프로세스 스킵');
+        return;
+      }
+      
       // 관리자 계정이어도 일반 로그인인 경우 인증 필요 (선택적)
       if (_isAdminUser(currentUser)) {
         print('🔑 관리자 계정이지만 일반 로그인 - 인증 프로세스 진행');
       }
       
-      final isVerified = await SmsAuthService.isPhoneVerified(
-        currentUser['member_phone'].toString()
-      );
+      final isVerified = await SmsAuthService.isPhoneVerified(memberPhone);
       
       if (!isVerified && mounted) {
         _showPhoneAuthGuide();
