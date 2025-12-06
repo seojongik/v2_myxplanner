@@ -1,0 +1,30 @@
+# =====================================================
+# 보안 설정 - 민감한 파일 접근 차단
+# =====================================================
+
+# config.php 직접 접근 차단
+<Files "config.php">
+    Require all denied
+</Files>
+
+# SQL 파일 접근 차단
+<Files "*.sql">
+    Require all denied
+</Files>
+
+# 로그 파일 접근 차단
+<Files "*.txt">
+    Require all denied
+</Files>
+
+<Files "*.log">
+    Require all denied
+</Files>
+
+# 디렉토리 목록 표시 금지
+Options -Indexes
+
+# PHP 에러 표시 금지 (프로덕션)
+php_flag display_errors off
+php_flag log_errors on
+
