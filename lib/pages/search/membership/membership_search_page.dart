@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/api_service.dart';
 import '../../../services/program_reservation_classifier.dart';
-import '../../../services/refund_service.dart';
 
 class MembershipSearchPage extends StatefulWidget {
   final bool isAdminMode;
@@ -79,249 +78,10 @@ class _MembershipSearchContentState extends State<MembershipSearchContent> {
   Map<String, dynamic>? _selectedContract;
   List<Map<String, dynamic>> _transactionHistory = [];
 
-  // 환불 관련 상태
-  bool _isCheckingRefund = false;
-  bool _isRefundable = false;
-  Map<String, dynamic>? _refundEligibility;
-
   @override
   void initState() {
     super.initState();
     _loadAllContracts();
-  }
-
-  /// 환불 가능 여부 확인
-  Future<void> _checkRefundEligibility(Map<String, dynamic> contract) async {
-    final branchId = widget.branchId;
-    final memberId = widget.selectedMember?['member_id'];
-    final contractHistoryId = contract['contract_history_id'];
-
-    if (branchId == null || memberId == null || contractHistoryId == null) {
-      setState(() {
-        _isRefundable = false;
-        _refundEligibility = null;
-      });
-      return;
-    }
-
-    // 포트원 결제가 아니면 환불 불가
-    final paymentInfo = contract['payment_info'] as Map<String, dynamic>?;
-    if (paymentInfo == null) {
-      setState(() {
-        _isRefundable = false;
-        _refundEligibility = null;
-      });
-      return;
-    }
-
-    setState(() {
-      _isCheckingRefund = true;
-    });
-
-    try {
-      final result = await RefundService.checkRefundEligibility(
-        branchId: branchId,
-        memberId: memberId,
-        contractHistoryId: contractHistoryId,
-      );
-
-      setState(() {
-        _isCheckingRefund = false;
-        _refundEligibility = result;
-        _isRefundable = result['success'] == true && 
-                        result['has_portone_payment'] == true && 
-                        result['is_refundable'] == true;
-      });
-
-      print('환불 가능 여부: $_isRefundable - ${result['reason']}');
-    } catch (e) {
-      print('환불 가능 여부 확인 오류: $e');
-      setState(() {
-        _isCheckingRefund = false;
-        _isRefundable = false;
-        _refundEligibility = null;
-      });
-    }
-  }
-
-  /// 환불 처리 다이얼로그
-  Future<void> _showRefundDialog() async {
-    if (_selectedContract == null || _refundEligibility == null) return;
-
-    final paymentAmount = _refundEligibility!['payment_amount'] as int? ?? 0;
-    final contractName = _selectedContract!['contract_name'] ?? '회원권';
-    final portonePaymentUid = _refundEligibility!['portone_payment_uid']?.toString() ?? '';
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 8),
-            Text('환불 확인'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '다음 회원권을 환불하시겠습니까?',
-              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    contractName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '환불 금액: ${RefundService.formatAmount(paymentAmount)}원',
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.red, size: 18),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '환불 처리 후에는 되돌릴 수 없습니다.\n실제 결제 취소가 진행됩니다.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.red,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('환불하기'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _processRefund(portonePaymentUid, paymentAmount);
-    }
-  }
-
-  /// 환불 처리 실행
-  Future<void> _processRefund(String paymentId, int amount) async {
-    final branchId = widget.branchId;
-    final memberId = widget.selectedMember?['member_id'];
-    final contractHistoryId = _selectedContract!['contract_history_id'];
-
-    if (branchId == null || memberId == null || contractHistoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('환불에 필요한 정보가 없습니다'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // 로딩 다이얼로그 표시
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('환불 처리 중...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final result = await RefundService.processRefund(
-        branchId: branchId,
-        memberId: memberId,
-        contractHistoryId: contractHistoryId,
-        paymentId: paymentId,
-        cancelReason: '고객 요청에 의한 환불',
-      );
-
-      Navigator.pop(context); // 로딩 다이얼로그 닫기
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('환불이 완료되었습니다 (${RefundService.formatAmount(result['refunded_amount'] ?? amount)}원)'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // 목록으로 돌아가고 새로고침
-        setState(() {
-          _selectedContract = null;
-          _transactionHistory.clear();
-          _isRefundable = false;
-          _refundEligibility = null;
-        });
-        _loadAllContracts();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('환불 실패: ${result['error']}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      Navigator.pop(context); // 로딩 다이얼로그 닫기
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('환불 오류: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   /// 포트원 결제 정보 조회 (결제 취소 등에 사용)
@@ -1197,8 +957,6 @@ class _MembershipSearchContentState extends State<MembershipSearchContent> {
           await _loadProgramHistory(contractHistoryId, memberId, branchId);
           break;
       }
-      // 환불 가능 여부 체크
-      await _checkRefundEligibility(contract);
     } catch (e) {
       print('거래 내역 조회 오류: $e');
       if (mounted) {
@@ -1909,25 +1667,6 @@ class _MembershipSearchContentState extends State<MembershipSearchContent> {
                     ],
                   ),
                 ),
-                // 환불 버튼 (환불 가능한 경우에만 표시)
-                if (_isCheckingRefund)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else if (_isRefundable)
-                  ElevatedButton.icon(
-                    onPressed: _showRefundDialog,
-                    icon: const Icon(Icons.replay, size: 16),
-                    label: const Text('환불'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade400,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
               ],
             ),
           ),

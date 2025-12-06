@@ -5,6 +5,7 @@ import '../../services/program_reservation_classifier.dart';
 import 'reservation_history/reservation_history_search_page.dart';
 import 'coupon/coupon_search_page.dart';
 import 'membership/membership_search_page.dart';
+import 'payment_history/payment_history_search_page.dart';
 
 class SearchPage extends StatefulWidget {
   final bool isAdminMode;
@@ -47,6 +48,13 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       'icon': Icons.card_membership,
       'color': Color(0xFF2196F3),
       'tables': ['v2_bills', 'v3_LS_countings', 'v2_bill_times', 'v2_bill_term', 'v2_bill_games'], // 여러 테이블 확인
+    },
+    {
+      'title': '결제내역',
+      'type': 'payment_history',
+      'icon': Icons.receipt_long,
+      'color': Color(0xFF9C27B0),
+      'alwaysShow': true, // 결제내역은 항상 표시
     },
   ];
 
@@ -130,6 +138,11 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       return await _checkProgramContracts(memberId, branchId);
     }
 
+    // 결제내역 탭은 포트원 결제 테이블 확인
+    if (tabType == 'payment_history') {
+      return await _checkPaymentHistory(memberId, branchId);
+    }
+
     if (table == null) return true;
 
     try {
@@ -154,6 +167,25 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     } catch (e) {
       print('$tabType 탭 확인 오류: $e');
       return true; // 오류 발생 시 표시
+    }
+  }
+
+  /// 결제내역 존재 여부 확인
+  Future<bool> _checkPaymentHistory(String memberId, String branchId) async {
+    try {
+      final data = await ApiService.getData(
+        table: 'v2_portone_payments',
+        where: [
+          {'field': 'branch_id', 'operator': '=', 'value': branchId},
+          {'field': 'member_id', 'operator': '=', 'value': memberId},
+        ],
+        limit: 1,
+      );
+
+      return data.isNotEmpty;
+    } catch (e) {
+      print('결제내역 탭 확인 오류: $e');
+      return false; // 오류 발생 시 숨김
     }
   }
 
@@ -266,6 +298,13 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
 
       case 'membership':
         return MembershipSearchContent(
+          isAdminMode: widget.isAdminMode,
+          selectedMember: widget.selectedMember,
+          branchId: widget.branchId,
+        );
+
+      case 'payment_history':
+        return PaymentHistorySearchContent(
           isAdminMode: widget.isAdminMode,
           selectedMember: widget.selectedMember,
           branchId: widget.branchId,

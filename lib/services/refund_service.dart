@@ -15,18 +15,28 @@ class RefundService {
   /// Returns: 환불 가능 여부 및 결제 정보
   static Future<Map<String, dynamic>> checkRefundEligibility({
     required String branchId,
-    required int memberId,
-    required int contractHistoryId,
+    required dynamic memberId,
+    required dynamic contractHistoryId,
   }) async {
+    // 타입 안전하게 int로 변환
+    final int memberIdInt = memberId is int ? memberId : int.tryParse(memberId.toString()) ?? 0;
+    final int contractHistoryIdInt = contractHistoryId is int ? contractHistoryId : int.tryParse(contractHistoryId.toString()) ?? 0;
+    
+    if (memberIdInt == 0 || contractHistoryIdInt == 0) {
+      return {
+        'success': false,
+        'error': '잘못된 회원 ID 또는 계약 ID',
+      };
+    }
     try {
-      print('🔍 환불 가능 여부 확인: contractHistoryId=$contractHistoryId');
+      print('🔍 환불 가능 여부 확인: contractHistoryId=$contractHistoryIdInt');
       
       final response = await _supabase.rpc(
         'check_contract_refund_eligibility',
         params: {
           'p_branch_id': branchId,
-          'p_member_id': memberId,
-          'p_contract_history_id': contractHistoryId,
+          'p_member_id': memberIdInt,
+          'p_contract_history_id': contractHistoryIdInt,
         },
       );
 
@@ -62,19 +72,30 @@ class RefundService {
   /// [cancelReason] 취소 사유
   static Future<Map<String, dynamic>> processRefund({
     required String branchId,
-    required int memberId,
-    required int contractHistoryId,
+    required dynamic memberId,
+    required dynamic contractHistoryId,
     required String paymentId,
     String cancelReason = '고객 요청에 의한 환불',
   }) async {
+    // 타입 안전하게 int로 변환
+    final int memberIdInt = memberId is int ? memberId : int.tryParse(memberId.toString()) ?? 0;
+    final int contractHistoryIdInt = contractHistoryId is int ? contractHistoryId : int.tryParse(contractHistoryId.toString()) ?? 0;
+    
+    if (memberIdInt == 0 || contractHistoryIdInt == 0) {
+      return {
+        'success': false,
+        'error': '잘못된 회원 ID 또는 계약 ID',
+      };
+    }
+    
     try {
-      print('💳 환불 처리 시작: contractHistoryId=$contractHistoryId');
+      print('💳 환불 처리 시작: contractHistoryId=$contractHistoryIdInt');
       
       // 1. 환불 가능 여부 재확인
       final eligibility = await checkRefundEligibility(
         branchId: branchId,
-        memberId: memberId,
-        contractHistoryId: contractHistoryId,
+        memberId: memberIdInt,
+        contractHistoryId: contractHistoryIdInt,
       );
 
       if (eligibility['success'] != true) {
@@ -127,8 +148,8 @@ class RefundService {
         'process_contract_refund',
         params: {
           'p_branch_id': branchId,
-          'p_member_id': memberId,
-          'p_contract_history_id': contractHistoryId,
+          'p_member_id': memberIdInt,
+          'p_contract_history_id': contractHistoryIdInt,
           'p_cancel_reason': cancelReason,
         },
       );
