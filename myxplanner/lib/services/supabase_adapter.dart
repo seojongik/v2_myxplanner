@@ -90,6 +90,7 @@ class SupabaseAdapter {
     'v2_staff_pro',
     'v2_staff_manager',
     'v3_members',  // 로그인 시 전화번호로 조회하므로 지점 정보 없이 조회 가능해야 함
+    'v2_discount_coupon_auto_triggers',  // 쿠폰 자동발급 트리거는 전체 공유 (branch_id null)
   };
   
   /// branch_id 필터 강제 추가 (보안 강화)

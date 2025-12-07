@@ -488,21 +488,54 @@ class Step7DbUpdates {
       if (selectedCoupons.isNotEmpty) {
         print('=== 할인권 v2_discount_coupon 업데이트 준비 (총 ${selectedCoupons.length}개) ===');
         
+        // 분당 단가 계산 (환산분 계산용)
+        final pricePerMin = (totalPrice > 0 && selectedDuration > 0) 
+            ? totalPrice / selectedDuration 
+            : 0.0;
+        print('분당 단가: ${pricePerMin.toStringAsFixed(2)}원/분');
+        
         for (int i = 0; i < selectedCoupons.length; i++) {
           final coupon = selectedCoupons[i];
           final couponId = coupon['coupon_id'];
           
           if (couponId != null) {
+            // 쿠폰별 실제 적용된 할인 금액 계산
+            int appliedDiscountAmt = 0;
+            final couponType = coupon['coupon_type']?.toString() ?? '';
+            final discountRatio = coupon['discount_ratio'] ?? 0;
+            final discountAmt = coupon['discount_amt'] ?? 0;
+            
+            if (couponType == '정률권' && discountRatio > 0) {
+              // 정률권: 총액의 비율
+              final ratio = (discountRatio is int) ? discountRatio : int.tryParse(discountRatio.toString()) ?? 0;
+              appliedDiscountAmt = (totalPrice * ratio / 100).round();
+            } else if (couponType == '정액권' && discountAmt > 0) {
+              // 정액권: 고정 금액
+              final amt = (discountAmt is int) ? discountAmt : int.tryParse(discountAmt.toString()) ?? 0;
+              appliedDiscountAmt = amt;
+            }
+            
+            // 환산분 계산 (할인 금액 / 분당 단가)
+            int appliedDiscountMin = 0;
+            if (pricePerMin > 0 && appliedDiscountAmt > 0) {
+              appliedDiscountMin = (appliedDiscountAmt / pricePerMin).round();
+            }
+            
             print('${i + 1}번째 쿠폰 업데이트:');
             print('  쿠폰 ID: $couponId');
+            print('  쿠폰 타입: $couponType');
             print('  회원 ID: ${selectedMember?['member_id']}');
             print('  예약 ID: $reservationId');
+            print('  적용 할인 금액: $appliedDiscountAmt원');
+            print('  환산 할인 분: $appliedDiscountMin분');
             
             final couponUpdateSuccess = await ApiService.updateDiscountCouponTable(
               branchId: branchId,
               memberId: selectedMember?['member_id']?.toString() ?? '',
               couponId: (couponId is int) ? couponId : int.tryParse(couponId.toString()) ?? 0,
               reservationId: reservationId,
+              appliedDiscountAmt: appliedDiscountAmt,
+              appliedDiscountMin: appliedDiscountMin,
             );
             
             if (couponUpdateSuccess) {

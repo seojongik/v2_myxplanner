@@ -536,7 +536,6 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
   void _onPaymentButtonPressed() async {
     final contract = widget.contract;
     final totalAmount = (contract['price'] ?? 0) as int;
-    final orderName = '${contract['contract_name'] ?? '회원권'} - ${widget.selectedMember?['member_name'] ?? '회원'}';
     
     // 토스페이먼츠 기본 채널키 사용
     final channelKey = PortonePaymentService.defaultChannelKey;
@@ -544,18 +543,99 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
     // 결제 ID 생성
     final paymentId = PortonePaymentService.generatePaymentId();
     
+    // ============================================================
+    // 결제 전 contract_history 미리 생성 (결제대기 상태)
+    // ============================================================
+    final branchId = ApiService.getCurrentBranchId();
+    final contractDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final memberId = widget.selectedMember?['member_id'] ?? 0;
+    final memberName = widget.selectedMember?['member_name'] ?? '회원';
+    final memberPhone = widget.selectedMember?['member_phone']?.toString() ?? '';
+    final branchName = branchInfo?['branch_name'] ?? '';
+    
+    // 결제대기 상태로 contract_history 먼저 생성
+    final pendingContractData = {
+      'branch_id': branchId,
+      'member_id': memberId,
+      'member_name': memberName,
+      'contract_id': contract['contract_id'],
+      'contract_name': contract['contract_name'],
+      'contract_type': widget.membershipType,
+      'contract_date': contractDate,
+      'contract_register': DateTime.now().toIso8601String(),
+      'payment_type': '포트원결제',
+      'contract_history_status': '결제대기', // 결제대기 상태로 생성
+      'price': contract['price'] ?? 0,
+      'contract_credit': contract['contract_credit'] ?? 0,
+      'contract_ls_min': contract['contract_ls_min'] ?? contract['contract_LS_min'] ?? 0,
+      'contract_games': contract['contract_games'] ?? 0,
+      'contract_ts_min': contract['contract_ts_min'] ?? contract['contract_TS_min'] ?? 0,
+      'contract_term_month': contract['contract_term_month'] ?? 0,
+      'contract_credit_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_credit_effect_month']),
+      'contract_ls_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month']),
+      'contract_games_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_games_effect_month']),
+      'contract_ts_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ts_min_effect_month'] ?? contract['contract_TS_min_effect_month']),
+      'contract_term_month_expiry_date': termEndDate != null ? DateFormat('yyyy-MM-dd').format(termEndDate!) : null,
+      'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
+      'pro_name': selectedProName,
+      'portone_payment_id': paymentId, // 포트원 결제 ID 미리 저장
+    };
+    
+    int? pendingContractHistoryId;
+    try {
+      final pendingResponse = await ApiService.addData(
+        table: 'v3_contract_history',
+        data: pendingContractData,
+      );
+      
+      if (pendingResponse['success'] != true) {
+        throw Exception('결제 준비 실패');
+      }
+      
+      pendingContractHistoryId = _safeParseInt(pendingResponse['insertId']);
+      debugPrint('✅ 결제대기 회원권 생성 완료 - ID: $pendingContractHistoryId');
+    } catch (e) {
+      debugPrint('❌ 결제 준비 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('결제 준비 중 오류가 발생했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+    
+    // ============================================================
+    // 주문명: {contract_history_id}_{branch_name}
+    // 예: "4051_프렌즈아카데미목동프리미엄점"
+    // ============================================================
+    final orderName = '${pendingContractHistoryId}_$branchName';
+    
+    // ============================================================
+    // 주문자명: ({member_id}){member_name}_{member_phone뒷4자리}
+    // 예: "(44)김현우_7373"
+    // ============================================================
+    final phoneLast4 = memberPhone.length >= 4 
+        ? memberPhone.substring(memberPhone.length - 4) 
+        : memberPhone;
+    final customerName = '($memberId)${memberName}_$phoneLast4';
+    
     // 웹 환경에서 결제 정보를 localStorage에 저장 (리디렉션 후 복원용)
     if (kIsWeb) {
       try {
         final storage = html.window.localStorage;
         storage['mgp_payment_contract'] = jsonEncode(contract);
         storage['mgp_payment_membershipType'] = widget.membershipType;
-        storage['mgp_payment_memberId'] = widget.selectedMember?['member_id']?.toString() ?? '';
-        storage['mgp_payment_memberName'] = widget.selectedMember?['member_name'] ?? '';
+        storage['mgp_payment_memberId'] = memberId.toString();
+        storage['mgp_payment_memberName'] = memberName;
         storage['mgp_payment_paymentId'] = paymentId;
         storage['mgp_payment_channelKey'] = channelKey;
         storage['mgp_payment_orderName'] = orderName;
+        storage['mgp_payment_customerName'] = customerName;
         storage['mgp_payment_totalAmount'] = totalAmount.toString();
+        storage['mgp_payment_pendingContractHistoryId'] = pendingContractHistoryId.toString();
         if (selectedProId != null) {
           storage['mgp_payment_proId'] = selectedProId!;
           storage['mgp_payment_proName'] = selectedProName ?? '';
@@ -580,6 +660,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           channelKey: channelKey,
           orderName: orderName,
           totalAmount: totalAmount,
+          customerName: customerName, // 주문자명 추가
           onPaymentSuccess: (paymentResult) async {
             // 결제 성공 시 처리 (결제 페이지는 아직 열려있음)
             final paymentId = paymentResult['paymentId'] as String?;
@@ -609,10 +690,23 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
               portoneTxId: txId,
               channelKey: channelKey,
               shouldClosePaymentPage: true,
+              pendingContractHistoryId: pendingContractHistoryId, // 미리 생성한 ID 전달
             );
           },
-          onPaymentFailed: (error) {
-            // 결제 실패 시 처리
+          onPaymentFailed: (error) async {
+            // 결제 실패 시 결제대기 상태의 contract_history 삭제
+            debugPrint('❌ 결제 실패 - 결제대기 회원권 삭제: $pendingContractHistoryId');
+            try {
+              await ApiService.deleteData(
+                table: 'v3_contract_history',
+                where: [
+                  {'field': 'contract_history_id', 'operator': '=', 'value': pendingContractHistoryId}
+                ],
+              );
+            } catch (e) {
+              debugPrint('⚠️ 결제대기 회원권 삭제 실패: $e');
+            }
+            
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('결제 실패: ${error['message'] ?? '알 수 없는 오류'}'),
@@ -625,9 +719,20 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
       ),
     );
     
-    // 결제가 취소된 경우
-    if (result == false) {
-      // 사용자가 결제를 취소한 경우 아무것도 하지 않음
+    // 결제가 취소된 경우 (사용자가 결제창을 닫은 경우)
+    if (result == false || result == null) {
+      debugPrint('❌ 결제 취소 - 결제대기 회원권 삭제: $pendingContractHistoryId');
+      try {
+        await ApiService.deleteData(
+          table: 'v3_contract_history',
+          where: [
+            {'field': 'contract_history_id', 'operator': '=', 'value': pendingContractHistoryId}
+          ],
+        );
+        debugPrint('✅ 결제대기 회원권 삭제 완료');
+      } catch (e) {
+        debugPrint('⚠️ 결제대기 회원권 삭제 실패: $e');
+      }
     }
   }
 
@@ -705,6 +810,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
     String? portoneTxId,
     String? channelKey,
     bool shouldClosePaymentPage = false,
+    int? pendingContractHistoryId, // 미리 생성된 결제대기 회원권 ID
   }) async {
     // 결제 ID 검증
     if (portonePaymentId.isEmpty || portonePaymentId.length < 10) {
@@ -861,48 +967,69 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
       debugPrint('✅ 결제 정보 저장 완료 - ID: $paymentRecordId');
       
       // ============================================================
-      // 🔐 3단계: 회원권 저장 (검증 및 결제 정보 저장 후에만 실행)
+      // 🔐 3단계: 회원권 활성화 (검증 및 결제 정보 저장 후에만 실행)
       // ============================================================
-      debugPrint('🔐 3단계: 회원권 저장 중...');
+      debugPrint('🔐 3단계: 회원권 활성화 중...');
       
-      final contractHistoryData = {
-        'branch_id': branchId,
-        'member_id': memberId,
-        'member_name': memberName,
-        'contract_id': contract['contract_id'],
-        'contract_name': contract['contract_name'],
-        'contract_type': widget.membershipType,
-        'contract_date': contractDate,
-        'contract_register': DateTime.now().toIso8601String(),
-        'payment_type': '포트원결제',
-        'contract_history_status': '활성',
-        'price': contract['price'] ?? 0,
-        'contract_credit': contract['contract_credit'] ?? 0,
-        'contract_ls_min': contract['contract_ls_min'] ?? contract['contract_LS_min'] ?? 0,
-        'contract_games': contract['contract_games'] ?? 0,
-        'contract_ts_min': contract['contract_ts_min'] ?? contract['contract_TS_min'] ?? 0,
-        'contract_term_month': contract['contract_term_month'] ?? 0,
-        'contract_credit_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_credit_effect_month']),
-        'contract_ls_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month']),
-        'contract_games_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_games_effect_month']),
-        'contract_ts_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ts_min_effect_month'] ?? contract['contract_TS_min_effect_month']),
-        'contract_term_month_expiry_date': termEndDate != null ? DateFormat('yyyy-MM-dd').format(termEndDate!) : null,
-        'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
-        'pro_name': selectedProName,
-        'portone_payment_id': portonePaymentId, // 결제 ID 연결
-      };
+      int contractHistoryId;
+      
+      // 미리 생성된 결제대기 회원권이 있으면 상태만 업데이트
+      if (pendingContractHistoryId != null && pendingContractHistoryId > 0) {
+        debugPrint('📝 미리 생성된 회원권 상태 업데이트: $pendingContractHistoryId');
+        await ApiService.updateData(
+          table: 'v3_contract_history',
+          data: {
+            'contract_history_status': '활성',
+            'portone_payment_id': portonePaymentId,
+          },
+          where: [
+            {'field': 'contract_history_id', 'operator': '=', 'value': pendingContractHistoryId}
+          ],
+        );
+        contractHistoryId = pendingContractHistoryId;
+        debugPrint('✅ 회원권 활성화 완료 - ID: $contractHistoryId');
+      } else {
+        // 기존 방식: 새로 생성 (웹 리디렉션 등 예외 상황용)
+        debugPrint('📝 새 회원권 생성 중...');
+        final contractHistoryData = {
+          'branch_id': branchId,
+          'member_id': memberId,
+          'member_name': memberName,
+          'contract_id': contract['contract_id'],
+          'contract_name': contract['contract_name'],
+          'contract_type': widget.membershipType,
+          'contract_date': contractDate,
+          'contract_register': DateTime.now().toIso8601String(),
+          'payment_type': '포트원결제',
+          'contract_history_status': '활성',
+          'price': contract['price'] ?? 0,
+          'contract_credit': contract['contract_credit'] ?? 0,
+          'contract_ls_min': contract['contract_ls_min'] ?? contract['contract_LS_min'] ?? 0,
+          'contract_games': contract['contract_games'] ?? 0,
+          'contract_ts_min': contract['contract_ts_min'] ?? contract['contract_TS_min'] ?? 0,
+          'contract_term_month': contract['contract_term_month'] ?? 0,
+          'contract_credit_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_credit_effect_month']),
+          'contract_ls_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ls_min_effect_month'] ?? contract['contract_LS_min_effect_month']),
+          'contract_games_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_games_effect_month']),
+          'contract_ts_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ts_min_effect_month'] ?? contract['contract_TS_min_effect_month']),
+          'contract_term_month_expiry_date': termEndDate != null ? DateFormat('yyyy-MM-dd').format(termEndDate!) : null,
+          'pro_id': selectedProId != null ? _safeParseInt(selectedProId) : null,
+          'pro_name': selectedProName,
+          'portone_payment_id': portonePaymentId,
+        };
 
-      final historyResponse = await ApiService.addData(
-        table: 'v3_contract_history',
-        data: contractHistoryData,
-      );
+        final historyResponse = await ApiService.addData(
+          table: 'v3_contract_history',
+          data: contractHistoryData,
+        );
 
-      if (historyResponse['success'] != true) {
-        throw Exception('계약 히스토리 저장 실패');
+        if (historyResponse['success'] != true) {
+          throw Exception('계약 히스토리 저장 실패');
+        }
+
+        contractHistoryId = _safeParseInt(historyResponse['insertId']);
+        debugPrint('✅ 회원권 저장 완료 - ID: $contractHistoryId');
       }
-
-      final contractHistoryId = _safeParseInt(historyResponse['insertId']);
-      debugPrint('✅ 회원권 저장 완료 - ID: $contractHistoryId');
       
       // 결제 정보에 contractHistoryId 업데이트 (portone_payment_uid로 찾아서 업데이트)
       if (contractHistoryId > 0) {
@@ -940,7 +1067,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'bill_balance_after': contractCredit,
           'bill_status': '결제완료',
           'contract_history_id': contractHistoryId,
-          'contract_credit_expiry_date': contractHistoryData['contract_credit_expiry_date'],
+          'contract_credit_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_credit_effect_month']),
         };
 
         final creditResponse = await ApiService.addData(
@@ -1022,7 +1149,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'contract_history_id': contractHistoryId,
           'routine_id': null,
           'branch_id': branchId,
-          'contract_ts_min_expiry_date': contractHistoryData['contract_ts_min_expiry_date'],
+          'contract_ts_min_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_ts_min_effect_month'] ?? contract['contract_TS_min_effect_month']),
         };
 
         await ApiService.addData(
@@ -1056,7 +1183,7 @@ class _ContractSetupPageState extends State<ContractSetupPage> {
           'member_name': memberName,
           'non_member_name': null,
           'non_member_phone': null,
-          'contract_games_expiry_date': contractHistoryData['contract_games_expiry_date'],
+          'contract_games_expiry_date': _calcExpiryDate(DateTime.now(), contract['contract_games_effect_month']),
         };
 
         await ApiService.addData(

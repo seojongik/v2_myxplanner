@@ -66,12 +66,18 @@ class PortonePaymentService {
     String currency = 'KRW',
     String payMethod = 'CARD',
     String? redirectUrl,
+    String? customerName, // 주문자명 추가
   }) {
     // 웹 환경과 동일하게 currency 변환 (KRW -> CURRENCY_KRW)
     final portoneCurrency = currency == 'KRW' ? 'CURRENCY_KRW' : currency;
     
     final redirectUrlParam = redirectUrl != null 
         ? ', redirectUrl: "$redirectUrl"'
+        : '';
+    
+    // 주문자 정보 파라미터
+    final customerParam = customerName != null && customerName.isNotEmpty
+        ? ', customer: { fullName: "$customerName" }'
         : '';
     
     return '''
@@ -164,7 +170,7 @@ class PortonePaymentService {
           orderName: "$orderName",
           totalAmount: $totalAmount,
           currency: "$portoneCurrency",
-          payMethod: "$payMethod"$redirectUrlParam
+          payMethod: "$payMethod"$redirectUrlParam$customerParam
         };
         
         console.log('💳 포트원 결제 파라미터:', paymentParams);

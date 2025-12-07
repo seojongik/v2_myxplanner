@@ -557,6 +557,80 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                             ),
                           ),
                         ),
+                        // 쿠폰 차감 정보 표시
+                        if (_currentTabPolicyInfo?['hasCouponDeduction'] == true) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange[200]!),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.discount, size: 16, color: Colors.orange[700]),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '사용된 쿠폰 할인액 차감: ${tabInfo['key'] == 'credit' 
+                                    ? '${NumberFormat('#,###').format(_currentTabPolicyInfo?['couponDeductionAmt'] ?? 0)}원'
+                                    : '${_currentTabPolicyInfo?['couponDeductionMin'] ?? 0}분'}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.orange[800],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        // 미회수분 경고 메시지
+                        if ((_currentTabPolicyInfo?['unrecoveredAmt'] ?? 0) > 0 || 
+                            (_currentTabPolicyInfo?['unrecoveredMin'] ?? 0) > 0) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red[300]!),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded, size: 18, color: Colors.red[700]),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        '쿠폰 미반환분: ${(_currentTabPolicyInfo?['unrecoveredAmt'] ?? 0) > 0 
+                                          ? '${NumberFormat('#,###').format(_currentTabPolicyInfo?['unrecoveredAmt'])}원'
+                                          : '${_currentTabPolicyInfo?['unrecoveredMin']}분'}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.red[800],
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '예약취소 할인쿠폰 미반환분 발생하였습니다.\n추후 할인쿠폰 발행이 제한될 수 있습니다.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.red[600],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         // 취소 조건 주석과 물음표 버튼 (오버플로우 방지)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1354,9 +1428,76 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
         print('  - 환불 시간: $refundAmount분');
       }
       
-      print('최종 환불 계산 결과:');
+      print('최종 환불 계산 결과 (쿠폰 차감 전):');
       print('  - 환불 예정: $refundAmount$unit');
       print('  - 페널티: $penaltyAmount$unit');
+      
+      // 사용된 쿠폰 할인액 차감 로직 추가
+      int couponDeductionAmt = 0;  // 차감할 금액
+      int couponDeductionMin = 0;  // 차감할 시간
+      int unrecoveredAmt = 0;      // 미회수 금액
+      int unrecoveredMin = 0;      // 미회수 시간
+      bool hasCouponDeduction = false;
+      
+      // 타석 예약인 경우에만 쿠폰 차감 적용
+      if (widget.reservation['type'] == '타석') {
+        final reservationId = widget.reservation['reservationId']?.toString() ?? '';
+        if (reservationId.isNotEmpty) {
+          try {
+            final issuedCouponPreview = await TsReservationCancelService.previewIssuedCoupons(reservationId);
+            if (issuedCouponPreview['success'] == true) {
+              final totalUsedDiscountAmt = issuedCouponPreview['total_used_discount_amt'] ?? 0;
+              final totalUsedDiscountMin = issuedCouponPreview['total_used_discount_min'] ?? 0;
+              
+              print('🎫 사용된 쿠폰 할인액 차감 시작');
+              print('  - 총 사용된 금액 할인: ${totalUsedDiscountAmt}원');
+              print('  - 총 사용된 시간 할인: ${totalUsedDiscountMin}분');
+              
+              if (tabKey == 'credit' && totalUsedDiscountAmt > 0) {
+                // 금액 결제 → 금액 할인 차감
+                couponDeductionAmt = totalUsedDiscountAmt;
+                if (refundAmount >= couponDeductionAmt) {
+                  refundAmount -= couponDeductionAmt;
+                  print('  - 금액 차감 완료: ${couponDeductionAmt}원 차감');
+                } else {
+                  // 환불 금액보다 차감액이 큰 경우
+                  unrecoveredAmt = couponDeductionAmt - refundAmount;
+                  couponDeductionAmt = refundAmount;  // 실제 차감된 금액
+                  refundAmount = 0;
+                  print('  - 환불금액 부족! 차감: ${couponDeductionAmt}원, 미회수: ${unrecoveredAmt}원');
+                }
+                hasCouponDeduction = true;
+              } else if (tabKey == 'time' && totalUsedDiscountMin > 0) {
+                // 시간 결제 → 시간 할인 차감
+                couponDeductionMin = totalUsedDiscountMin;
+                if (refundAmount >= couponDeductionMin) {
+                  refundAmount -= couponDeductionMin;
+                  print('  - 시간 차감 완료: ${couponDeductionMin}분 차감');
+                } else {
+                  // 환불 시간보다 차감 시간이 큰 경우
+                  unrecoveredMin = couponDeductionMin - refundAmount;
+                  couponDeductionMin = refundAmount;  // 실제 차감된 시간
+                  refundAmount = 0;
+                  print('  - 환불시간 부족! 차감: ${couponDeductionMin}분, 미회수: ${unrecoveredMin}분');
+                }
+                hasCouponDeduction = true;
+              }
+            }
+          } catch (e) {
+            print('⚠️ 쿠폰 차감 조회 실패: $e');
+          }
+        }
+      }
+      
+      print('🎫 최종 환불 계산 결과 (쿠폰 차감 후):');
+      print('  - 환불 예정: $refundAmount$unit');
+      print('  - 페널티: $penaltyAmount$unit');
+      if (hasCouponDeduction) {
+        print('  - 쿠폰 차감: ${tabKey == 'credit' ? '$couponDeductionAmt원' : '$couponDeductionMin분'}');
+        if (unrecoveredAmt > 0 || unrecoveredMin > 0) {
+          print('  - ⚠️ 미회수분: ${unrecoveredAmt > 0 ? '${unrecoveredAmt}원' : '${unrecoveredMin}분'}');
+        }
+      }
       print('🔍 환불 시간 계산 디버깅 완료');
       print('');
       
@@ -1367,6 +1508,11 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
         'penaltyAmount': penaltyAmount,
         'refundAmount': refundAmount,
         'unit': unit,
+        'couponDeductionAmt': couponDeductionAmt,
+        'couponDeductionMin': couponDeductionMin,
+        'unrecoveredAmt': unrecoveredAmt,
+        'unrecoveredMin': unrecoveredMin,
+        'hasCouponDeduction': hasCouponDeduction,
       };
       
     } catch (e) {
@@ -1389,19 +1535,12 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
       
       if (billId == null) return 0;
       
-      // 현재 예약의 bill 정보 조회하여 contract_history_id 가져오기
-      final billData = await ApiService.getData(
-        table: 'v2_bills',
-        where: [
-          {'field': 'bill_id', 'operator': '=', 'value': billId}
-        ],
-        limit: 1,
-      );
+      print('🔍 선불크레딧 잔액 조회 시작');
+      print('  - billId (실제로는 contract_history_id): $billId');
       
-      if (billData.isEmpty) return 0;
-      
-      final contractHistoryId = billData.first['contract_history_id'];
-      if (contractHistoryId == null) return 0;
+      // v2_priced_ts.bill_id는 실제로 contract_history_id를 저장하고 있음
+      // 따라서 billId를 contract_history_id로 직접 사용
+      final contractHistoryId = billId;
       
       // 동일 계약의 최종 레코드(가장 큰 bill_id) 조회
       final latestBillData = await ApiService.getData(
@@ -1416,9 +1555,13 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
       );
       
       if (latestBillData.isNotEmpty) {
-        return latestBillData.first['bill_balance_after'] ?? 0;
+        final balance = latestBillData.first['bill_balance_after'] ?? 0;
+        print('  - 조회된 최신 bill_id: ${latestBillData.first['bill_id']}');
+        print('  - 조회된 잔액: $balance');
+        return balance;
       }
       
+      print('  - 잔액 조회 결과 없음');
       return 0;
     } catch (e) {
       print('잔액 조회 오류: $e');

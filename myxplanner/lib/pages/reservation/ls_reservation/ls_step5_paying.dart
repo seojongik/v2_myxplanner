@@ -658,48 +658,48 @@ class _LsStep5PayingState extends State<LsStep5Paying> {
                 ),
             ],
           ),
-          child: Row(
-            children: [
-              // 왼쪽 색상 바
-              Container(
-                width: 4,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: isSelected ? cardColor : cardColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(10),
-                    bottomLeft: Radius.circular(10),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                // 왼쪽 색상 바 (동적 높이)
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: isSelected ? cardColor : cardColor.withOpacity(0.3),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(10),
+                      bottomLeft: Radius.circular(10),
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(width: 12),
+                SizedBox(width: 12),
 
-              // 선택 표시 (체크박스)
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: isSelected
-                        ? cardColor
-                        : (isDisabled ? Color(0xFFD1D5DB) : Color(0xFFD1D5DB)),
-                    width: 2,
+                // 선택 표시 (체크박스)
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: isSelected
+                          ? cardColor
+                          : (isDisabled ? Color(0xFFD1D5DB) : Color(0xFFD1D5DB)),
+                      width: 2,
+                    ),
+                    color: isSelected ? cardColor : Colors.transparent,
                   ),
-                  color: isSelected ? cardColor : Colors.transparent,
+                  child: isSelected
+                      ? Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Colors.white,
+                      )
+                    : null,
                 ),
-                child: isSelected
-                    ? Icon(
-                        Icons.check,
-                        size: 16,
-                        color: Colors.white,
-                    )
-                  : null,
-              ),
-              SizedBox(width: 12),
-            
-            // 회원권 정보
-            Expanded(
+                SizedBox(width: 12),
+              
+              // 회원권 정보
+              Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -762,12 +762,13 @@ class _LsStep5PayingState extends State<LsStep5Paying> {
                         ),
                       ],
                     ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          ),
         ),
       ),
     );

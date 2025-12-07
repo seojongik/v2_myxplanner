@@ -2320,6 +2320,10 @@ class ApiService {
       final today = DateTime.now();
       final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       
+      // 만료일 체크 기준 날짜: 예약 날짜가 있으면 예약 날짜, 없으면 오늘
+      final checkDateStr = reservationDate ?? todayStr;
+      print('만료일 체크 기준 날짜: $checkDateStr (예약날짜: $reservationDate, 오늘: $todayStr)');
+      
       // 1. v2_bill_term에서 기간권 조회 (contract_history_id별 최신 레코드 기준)
       // 환불 시 만료일이 오늘로 당겨지므로, 만료일 기준으로 유효 여부 판단
       // GROUP BY를 사용할 수 없으므로 모든 레코드를 가져와서 contract_history_id별로 최신 데이터 추출
@@ -2381,7 +2385,7 @@ class ApiService {
         }
       }
       
-      // 3. 최신 레코드 기준으로 만료일이 오늘 이후인 것만 필터링
+      // 3. 최신 레코드 기준으로 만료일이 기준일(예약일 또는 오늘) 이후인 것만 필터링
       final validContractHistoryIds = <String>{};
       for (final entry in contractInfo.entries) {
         final contractHistoryId = entry.key;
@@ -2390,13 +2394,13 @@ class ApiService {
         if (expiryDateStr != null && expiryDateStr.isNotEmpty) {
           try {
             final expiryDate = DateTime.parse(expiryDateStr);
-            final todayDate = DateTime.parse(todayStr);
+            final checkDate = DateTime.parse(checkDateStr);
             
-            if (!expiryDate.isBefore(todayDate)) {
+            if (!expiryDate.isBefore(checkDate)) {
               validContractHistoryIds.add(contractHistoryId);
-              print('유효한 기간권: contract_history_id=$contractHistoryId, 만료일=$expiryDateStr (오늘=$todayStr)');
+              print('유효한 기간권: contract_history_id=$contractHistoryId, 만료일=$expiryDateStr (기준일=$checkDateStr)');
             } else {
-              print('만료된 기간권 제외: contract_history_id=$contractHistoryId, 만료일=$expiryDateStr (오늘=$todayStr)');
+              print('만료된 기간권 제외: contract_history_id=$contractHistoryId, 만료일=$expiryDateStr (기준일=$checkDateStr)');
             }
           } catch (e) {
             print('만료일 파싱 오류: $e');
@@ -3286,11 +3290,15 @@ class ApiService {
   }
 
   // v2_discount_coupon 테이블 업데이트 (할인권 사용 시)
+  /// [appliedDiscountAmt] 실제 적용된 할인 금액
+  /// [appliedDiscountMin] 환산된 할인 분 (시간권 기준: 할인금액 / 분당단가)
   static Future<bool> updateDiscountCouponTable({
     required String branchId,
     required String memberId,
     required int couponId,
     required String reservationId,
+    int appliedDiscountAmt = 0,
+    int appliedDiscountMin = 0,
   }) async {
     try {
       print('=== v2_discount_coupon 테이블 업데이트 시작 ===');
@@ -3298,6 +3306,8 @@ class ApiService {
       print('회원 ID: $memberId');
       print('쿠폰 ID: $couponId');
       print('예약 ID: $reservationId');
+      print('적용 할인 금액: $appliedDiscountAmt원');
+      print('환산 할인 분: $appliedDiscountMin분');
       
       // 현재 시간
       final currentTimestamp = DateTime.now().toIso8601String();
@@ -3307,6 +3317,8 @@ class ApiService {
         'coupon_status': '사용',
         'coupon_use_timestamp': currentTimestamp,
         'reservation_id_used': reservationId,
+        'applied_discount_amt': appliedDiscountAmt,
+        'applied_discount_min': appliedDiscountMin,
       };
       
       print('쿠폰 업데이트 데이터: $couponUpdateData');
@@ -3344,18 +3356,17 @@ class ApiService {
       final branchId = getCurrentBranchId();
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       
-      // 1단계: 레슨 카운팅 데이터 조회 (서버 사이드 필터링)
-      final List<Map<String, dynamic>> records = await getData(
+      // 1단계: 레슨 카운팅 데이터 조회 (LS_balance_min_after > 0 조건 제거 - 환불 레코드도 포함하여 최신 잔액 파악)
+      final List<Map<String, dynamic>> allRecords = await getData(
         table: 'v3_LS_countings',
         fields: ['pro_id', 'LS_balance_min_after', 'LS_expiry_date', 'LS_contract_id', 'LS_counting_id', 'contract_history_id'],
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
-          {'field': 'LS_balance_min_after', 'operator': '>', 'value': 0},
         ],
       );
       
-      if (records.isEmpty) {
+      if (allRecords.isEmpty) {
         return {
           'success': true,
           'message': '조회된 레슨 카운팅 데이터가 없습니다.',
@@ -3373,7 +3384,65 @@ class ApiService {
         };
       }
       
-      // 2단계: 클라이언트 사이드 만료일 검증 및 유효한 pro_id 수집
+      // 2단계: contract_history_id별 가장 최신(MAX ls_counting_id) 레코드만 추출
+      print('\n=== contract_history_id별 최신 레코드 추출 시작 ===');
+      print('전체 조회된 레코드 수: ${allRecords.length}');
+      
+      final Map<String, Map<String, dynamic>> latestRecordByContractHistory = {};
+      
+      for (final record in allRecords) {
+        final contractHistoryId = record['contract_history_id']?.toString();
+        if (contractHistoryId == null || contractHistoryId.isEmpty) continue;
+        
+        final lsCountingId = int.tryParse(record['LS_counting_id']?.toString() ?? '0') ?? 0;
+        
+        // 기존에 저장된 레코드가 없거나, 현재 레코드의 LS_counting_id가 더 큰 경우 업데이트
+        if (!latestRecordByContractHistory.containsKey(contractHistoryId) ||
+            lsCountingId > (int.tryParse(latestRecordByContractHistory[contractHistoryId]!['LS_counting_id']?.toString() ?? '0') ?? 0)) {
+          latestRecordByContractHistory[contractHistoryId] = record;
+        }
+      }
+      
+      print('contract_history_id별 최신 레코드:');
+      for (final entry in latestRecordByContractHistory.entries) {
+        final contractHistoryId = entry.key;
+        final record = entry.value;
+        print('  - contract_history_id: $contractHistoryId → ls_counting_id: ${record['LS_counting_id']}, 잔액: ${record['LS_balance_min_after']}분');
+      }
+      
+      // 3단계: 최신 레코드 중 LS_balance_min_after > 0인 것만 필터링
+      final List<Map<String, dynamic>> records = latestRecordByContractHistory.values
+          .where((record) {
+            final balance = int.tryParse(record['LS_balance_min_after']?.toString() ?? '0') ?? 0;
+            if (balance <= 0) {
+              print('  → contract_history_id ${record['contract_history_id']} 제외: 잔액 ${balance}분 (0 이하)');
+            }
+            return balance > 0;
+          })
+          .toList();
+      
+      print('잔액 > 0 필터링 후 레코드 수: ${records.length}');
+      print('=== contract_history_id별 최신 레코드 추출 종료 ===\n');
+      
+      if (records.isEmpty) {
+        return {
+          'success': true,
+          'message': '사용 가능한 레슨 카운팅 데이터가 없습니다.',
+          'data': [],
+          'debug_info': {
+            'message': '모든 계약의 잔액이 0입니다',
+            'total_records': allRecords.length,
+            'valid_records': 0,
+            'pro_ids': [],
+            'pro_info': {},
+            'pro_schedule': {},
+            'max_reservation_ahead_days': 0,
+            'today': today,
+          }
+        };
+      }
+      
+      // 4단계: 클라이언트 사이드 만료일 검증 및 유효한 pro_id 수집
       final List<Map<String, dynamic>> validRecords = [];
       final Set<String> validProIds = {};
 
@@ -3385,7 +3454,7 @@ class ApiService {
 
       Map<String, bool> contractHistoryValidityMap = {};
 
-      // 1단계: contract_history_id 직접 수집
+      // contract_history_id 직접 수집
       final Set<String> contractHistoryIds = {};
       for (final record in records) {
         final historyId = record['contract_history_id']?.toString();
@@ -3395,7 +3464,7 @@ class ApiService {
       }
       print('수집된 contract_history_id들: $contractHistoryIds');
 
-      // 2단계: 필터링 로직 실행
+      // 필터링 로직 실행
       if (contractHistoryIds.isNotEmpty) {
         try {
           // v3_contract_history에서 contract_id 조회
@@ -3497,7 +3566,6 @@ class ApiService {
           validRecords.add(record);
 
           // contract_history_id별로 가장 최근 레코드의 pro_id만 수집
-          final contractHistoryId = record['contract_history_id']?.toString();
           final lsCountingId = int.tryParse(record['LS_counting_id']?.toString() ?? '0') ?? 0;
           final proId = record['pro_id']?.toString();
 
@@ -3989,32 +4057,31 @@ class ApiService {
       final baseDate = reservationDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
       print('만료일 검증 기준 날짜: $baseDate');
       
-      // 1단계: 서버 사이드 필터링 (잔액 > 0)
-      final List<Map<String, dynamic>> records = await getData(
+      // 1단계: 모든 레슨 카운팅 데이터 조회 (LS_balance_min_after 조건 제거 - 환불 레코드도 포함하여 최신 잔액 파악)
+      final List<Map<String, dynamic>> allRecords = await getData(
         table: 'v3_LS_countings',
         fields: ['LS_contract_id', 'LS_counting_id', 'LS_balance_min_after', 'LS_expiry_date', 'pro_id', 'pro_name', 'contract_history_id'],
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'member_id', 'operator': '=', 'value': memberId},
-          {'field': 'LS_balance_min_after', 'operator': '>', 'value': '0'},
         ],
         orderBy: [
           {'field': 'LS_counting_id', 'direction': 'DESC'}
         ],
       );
       
-      print('서버 사이드 필터링 후 조회된 레슨 카운팅 수: ${records.length}');
+      print('전체 조회된 레슨 카운팅 수: ${allRecords.length}');
 
       // 디버깅: 조회된 레코드 샘플 확인
-      if (records.isNotEmpty) {
+      if (allRecords.isNotEmpty) {
         print('📋 조회된 레슨 카운팅 샘플 (최대 3개):');
-        for (int i = 0; i < records.length && i < 3; i++) {
-          final record = records[i];
-          print('  레코드 $i: LS_contract_id=${record['LS_contract_id']}, contract_history_id="${record['contract_history_id']}", LS_counting_id=${record['LS_counting_id']}');
+        for (int i = 0; i < allRecords.length && i < 3; i++) {
+          final record = allRecords[i];
+          print('  레코드 $i: LS_contract_id=${record['LS_contract_id']}, contract_history_id="${record['contract_history_id']}", LS_counting_id=${record['LS_counting_id']}, 잔액=${record['LS_balance_min_after']}');
         }
       }
 
-      if (records.isEmpty) {
+      if (allRecords.isEmpty) {
         print('조회된 레슨 카운팅 데이터가 없음');
         return {
           'success': true,
@@ -4033,11 +4100,12 @@ class ApiService {
         };
       }
 
-      // 2단계: 각 contract_history_id별 최신 레코드 필터링
+      // 2단계: 각 contract_history_id별 최신 레코드(MAX ls_counting_id) 추출
+      print('\n=== contract_history_id별 최신 레코드 추출 시작 ===');
       final Map<String, Map<String, dynamic>> latestRecordsByContract = {};
       int skippedCount = 0;
 
-      for (final record in records) {
+      for (final record in allRecords) {
         final contractHistoryId = record['contract_history_id']?.toString();
         final lsCountingId = record['LS_counting_id'];
 
@@ -4059,14 +4127,54 @@ class ApiService {
         print('⚠️ 총 ${skippedCount}개 레코드 건너뜀 (contract_history_id 없음)');
       }
 
-      print('각 계약별 최신 레코드 필터링 완료: ${latestRecordsByContract.length}개 고유 계약');
+      print('contract_history_id별 최신 레코드:');
+      for (final entry in latestRecordsByContract.entries) {
+        final contractHistoryId = entry.key;
+        final record = entry.value;
+        print('  - contract_history_id: $contractHistoryId → ls_counting_id: ${record['LS_counting_id']}, 잔액: ${record['LS_balance_min_after']}분');
+      }
+
+      // 3단계: 최신 레코드 중 LS_balance_min_after > 0인 것만 필터링
+      final filteredRecords = <String, Map<String, dynamic>>{};
+      for (final entry in latestRecordsByContract.entries) {
+        final contractHistoryId = entry.key;
+        final record = entry.value;
+        final balance = int.tryParse(record['LS_balance_min_after']?.toString() ?? '0') ?? 0;
+        if (balance > 0) {
+          filteredRecords[contractHistoryId] = record;
+        } else {
+          print('  → contract_history_id $contractHistoryId 제외: 잔액 ${balance}분 (0 이하)');
+        }
+      }
+
+      print('잔액 > 0 필터링 후 계약 수: ${filteredRecords.length}');
+      print('=== contract_history_id별 최신 레코드 추출 종료 ===\n');
+
+      if (filteredRecords.isEmpty) {
+        print('사용 가능한 레슨 카운팅 데이터가 없음');
+        return {
+          'success': true,
+          'message': '모든 계약의 잔액이 0입니다',
+          'data': [],
+          'debug_info': {
+            'message': '모든 계약의 잔액이 0입니다',
+            'total_records': allRecords.length,
+            'valid_records': 0,
+            'pro_ids': [],
+            'pro_info': {},
+            'pro_schedule': {},
+            'max_reservation_ahead_days': 0,
+            'today': baseDate,
+          }
+        };
+      }
       
-      // 3단계: 클라이언트 사이드 만료일 검증 및 유효한 pro_id 수집
+      // 4단계: 클라이언트 사이드 만료일 검증 및 유효한 pro_id 수집
       final List<Map<String, dynamic>> validRecords = [];
       final Set<String> validProIds = {};
       final Set<String> contractHistoryIds = {};
       
-      for (final record in latestRecordsByContract.values) {
+      for (final record in filteredRecords.values) {
         final expiryDateStr = record['LS_expiry_date']?.toString();
         final contractHistoryId = record['contract_history_id']?.toString();
         bool isValid = true;
@@ -4100,7 +4208,7 @@ class ApiService {
         }
       }
       
-      // 3단계: v3_contract_history 테이블에서 contract_id 조회 후 program_reservation_availability 확인
+      // 5단계: v3_contract_history 테이블에서 contract_id 조회 후 program_reservation_availability 확인
       List<Map<String, dynamic>> programValidRecords = [];
       
       if (contractHistoryIds.isNotEmpty) {
@@ -4254,7 +4362,7 @@ class ApiService {
         'data': programValidRecords,
         'debug_info': {
           'message': '프로그램 예약 가능한 레슨 데이터 조회 완료',
-          'total_records': records.length,
+          'total_records': allRecords.length,
           'valid_records': programValidRecords.length,
           'pro_ids': validProIds.toList(),
           'pro_info': proInfoMap,

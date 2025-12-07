@@ -2057,97 +2057,101 @@ class Step6PayingState extends State<Step6Paying> {
                 ),
             ],
           ),
-          child: Row(
-            children: [
-              // 왼쪽 색상 바
-              Container(
-                width: 4,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: isSelected ? color : color.withOpacity(0.3),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(10),
-                    bottomLeft: Radius.circular(10),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                // 왼쪽 색상 바 (동적 높이)
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: isSelected ? color : color.withOpacity(0.3),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(10),
+                      bottomLeft: Radius.circular(10),
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(width: 12),
+                SizedBox(width: 12),
 
-              // 선택 표시 (체크박스)
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: isSelected
-                        ? color
-                        : (isDisabled ? Color(0xFFD1D5DB) : Color(0xFFD1D5DB)),
-                    width: 2,
+                // 선택 표시 (체크박스)
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: isSelected
+                          ? color
+                          : (isDisabled ? Color(0xFFD1D5DB) : Color(0xFFD1D5DB)),
+                      width: 2,
+                    ),
+                    color: isSelected ? color : Colors.transparent,
                   ),
-                  color: isSelected ? color : Colors.transparent,
+                  child: isSelected
+                      ? Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Colors.white,
+                        )
+                      : null,
                 ),
-                child: isSelected
-                    ? Icon(
-                        Icons.check,
-                        size: 16,
-                        color: Colors.white,
-                      )
-                    : null,
-              ),
-              SizedBox(width: 12),
+                SizedBox(width: 12),
 
-              // 결제수단 정보
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 결제수단 아이콘 + 제목
-                    Row(
+                // 결제수단 정보
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          method['icon'],
-                          size: 18,
-                          color: isDisabled ? Color(0xFF9CA3AF) : color,
-                        ),
-                        SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            method['title'],
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: (isDisabled ? Color(0xFF9CA3AF) : Color(0xFF1F2937)),
+                        // 결제수단 아이콘 + 제목
+                        Row(
+                          children: [
+                            Icon(
+                              method['icon'],
+                              size: 18,
+                              color: isDisabled ? Color(0xFF9CA3AF) : color,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                method['title'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: (isDisabled ? Color(0xFF9CA3AF) : Color(0xFF1F2937)),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
+                        SizedBox(height: 4),
+                        // 잔액 정보
+                        if (method['type'].startsWith('period_pass_')) ...[
+                          _buildPeriodPassBalanceText(method['type'], isDisabled, isSelected, color),
+                        ] else if (method['type'].startsWith('prepaid_credit_')) ...[
+                          _buildPrepaidCreditBalanceText(method['type'], isDisabled, isSelected, color),
+                        ] else if (method['type'].startsWith('time_pass_')) ...[
+                          _buildTimePassBalanceText(method['type'], isDisabled, isSelected, color),
+                        ] else ...[
+                          Text(
+                            _formatBalance(method['type']),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: (isDisabled ? Color(0xFF9CA3AF) : Color(0xFF6B7280)),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    SizedBox(height: 4),
-                    // 잔액 정보
-                    if (method['type'].startsWith('period_pass_')) ...[
-                      _buildPeriodPassBalanceText(method['type'], isDisabled, isSelected, color),
-                    ] else if (method['type'].startsWith('prepaid_credit_')) ...[
-                      _buildPrepaidCreditBalanceText(method['type'], isDisabled, isSelected, color),
-                    ] else if (method['type'].startsWith('time_pass_')) ...[
-                      _buildTimePassBalanceText(method['type'], isDisabled, isSelected, color),
-                    ] else ...[
-                      Text(
-                        _formatBalance(method['type']),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: (isDisabled ? Color(0xFF9CA3AF) : Color(0xFF6B7280)),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
-              SizedBox(width: 12),
-            ],
+                SizedBox(width: 12),
+              ],
+            ),
           ),
         ),
       ),

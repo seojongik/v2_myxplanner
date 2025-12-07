@@ -20,6 +20,7 @@ class PortonePaymentPage extends StatefulWidget {
   final int totalAmount;
   final String currency;
   final String payMethod; // 결제 수단 (CARD, EASY_PAY 등)
+  final String? customerName; // 주문자명
   final Function(Map<String, dynamic>)? onPaymentSuccess;
   final Function(Map<String, dynamic>)? onPaymentFailed;
 
@@ -31,6 +32,7 @@ class PortonePaymentPage extends StatefulWidget {
     required this.totalAmount,
     this.currency = 'KRW',
     this.payMethod = 'CARD',
+    this.customerName,
     this.onPaymentSuccess,
     this.onPaymentFailed,
   }) : super(key: key);
@@ -668,7 +670,7 @@ class _PortonePaymentPageState extends State<PortonePaymentPage> {
       final isMobileWeb = _isMobileWeb();
       final redirectUrl = isMobileWeb ? _getRedirectUrl() : null;
       
-      final paymentRequestMap = {
+      final paymentRequestMap = <String, dynamic>{
         'storeId': PortonePaymentService.storeId,
         'channelKey': widget.channelKey,
         'paymentId': widget.paymentId,
@@ -677,6 +679,14 @@ class _PortonePaymentPageState extends State<PortonePaymentPage> {
         'currency': widget.currency == 'KRW' ? 'CURRENCY_KRW' : widget.currency,
         'payMethod': widget.payMethod,
       };
+      
+      // 주문자 정보 추가 (customer 객체)
+      if (widget.customerName != null && widget.customerName!.isNotEmpty) {
+        paymentRequestMap['customer'] = {
+          'fullName': widget.customerName,
+        };
+        debugPrint('👤 주문자 정보 추가: ${widget.customerName}');
+      }
       
       // PC: 팝업 방식, 모바일: 리디렉션 방식
       if (isMobileWeb && redirectUrl != null) {
@@ -959,6 +969,7 @@ class _PortonePaymentPageState extends State<PortonePaymentPage> {
       currency: widget.currency,
       payMethod: widget.payMethod,
       redirectUrl: redirectUrl, // APK 환경에서 리디렉션 URL 필수
+      customerName: widget.customerName, // 주문자명 추가
     );
 
     _webViewController = WebViewController()
