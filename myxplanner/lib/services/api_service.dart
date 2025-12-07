@@ -2863,7 +2863,9 @@ class ApiService {
   }
 
   // v2_priced_TS 테이블 업데이트
-  static Future<bool> updatePricedTsTable(Map<String, dynamic> pricedTsData) async {
+  /// v2_priced_TS 테이블 업데이트
+  /// 반환값: {'success': bool, 'error': String?, 'isDuplicate': bool}
+  static Future<Map<String, dynamic>> updatePricedTsTable(Map<String, dynamic> pricedTsData) async {
     try {
       print('=== v2_priced_TS 테이블 업데이트 시작 ===');
       print('업데이트 데이터: $pricedTsData');
@@ -2875,14 +2877,38 @@ class ApiService {
       
       if (result['success'] == true) {
         print('✅ v2_priced_TS 테이블 업데이트 성공');
-        return true;
+        return {'success': true, 'error': null, 'isDuplicate': false};
       } else {
-        print('❌ v2_priced_TS 테이블 업데이트 실패: ${result['message']}');
-        return false;
+        final errorMessage = result['message']?.toString() ?? '';
+        print('❌ v2_priced_TS 테이블 업데이트 실패: $errorMessage');
+        
+        // DB 트리거에서 발생한 중복 에러 체크 (23505: unique_violation)
+        final isDuplicate = errorMessage.contains('23505') || 
+                           errorMessage.contains('이미 예약이 존재합니다') ||
+                           errorMessage.contains('unique') ||
+                           errorMessage.contains('duplicate');
+        
+        return {
+          'success': false, 
+          'error': errorMessage,
+          'isDuplicate': isDuplicate,
+        };
       }
     } catch (e) {
-      print('❌ v2_priced_TS 테이블 업데이트 오류: $e');
-      return false;
+      final errorString = e.toString();
+      print('❌ v2_priced_TS 테이블 업데이트 오류: $errorString');
+      
+      // 예외에서도 중복 에러 체크
+      final isDuplicate = errorString.contains('23505') || 
+                         errorString.contains('이미 예약이 존재합니다') ||
+                         errorString.contains('unique') ||
+                         errorString.contains('duplicate');
+      
+      return {
+        'success': false, 
+        'error': errorString,
+        'isDuplicate': isDuplicate,
+      };
     }
   }
 
@@ -3935,12 +3961,118 @@ class ApiService {
         data: orderData,
       );
       
-      print('레슨 예약 저장 성공: $result');
+      if (result['success'] == true) {
+        print('✅ 레슨 예약 저장 성공: $result');
+        return {
+          ...result,
+          'isDuplicate': false,
+        };
+      } else {
+        final errorMessage = result['message']?.toString() ?? '';
+        print('❌ 레슨 예약 저장 실패: $errorMessage');
+        
+        // DB 트리거에서 발생한 중복 에러 체크 (23505: unique_violation)
+        final isDuplicate = errorMessage.contains('23505') || 
+                           errorMessage.contains('이미 레슨 예약이 존재합니다') ||
+                           errorMessage.contains('unique') ||
+                           errorMessage.contains('duplicate');
+        
+        return {
+          ...result,
+          'isDuplicate': isDuplicate,
+          'errorMessage': isDuplicate 
+              ? '해당 시간대에 이미 레슨 예약이 존재합니다.'
+              : '레슨 예약 저장 중 오류가 발생했습니다.',
+        };
+      }
+      
+    } catch (e) {
+      final errorString = e.toString();
+      print('❌ 레슨 예약 저장 예외: $errorString');
+      
+      // 예외에서도 중복 에러 체크
+      final isDuplicate = errorString.contains('23505') || 
+                         errorString.contains('이미 레슨 예약이 존재합니다') ||
+                         errorString.contains('unique') ||
+                         errorString.contains('duplicate');
+      
+      return {
+        'success': false,
+        'isDuplicate': isDuplicate,
+        'errorMessage': isDuplicate 
+            ? '해당 시간대에 이미 레슨 예약이 존재합니다.'
+            : '레슨 예약 저장 중 오류가 발생했습니다: $e',
+      };
+    }
+  }
+
+  // ========== 특수 예약 트랜잭션 함수 ==========
+  // 타석 + 레슨을 원자적으로 처리 (모두 성공하거나 모두 실패)
+  static Future<Map<String, dynamic>> insertSpecialReservation({
+    required List<Map<String, dynamic>> tsRecords,      // 타석 예약 배열
+    required List<Map<String, dynamic>> lsOrders,       // 레슨 예약 배열
+    required List<Map<String, dynamic>> lsCountings,    // 레슨 카운팅 배열
+    required List<Map<String, dynamic>> billTimes,      // 타석 차감 기록 배열
+  }) async {
+    try {
+      print('');
+      print('═══════════════════════════════════════════════════════════');
+      print('🔐 특수 예약 트랜잭션 시작');
+      print('═══════════════════════════════════════════════════════════');
+      print('타석 예약: ${tsRecords.length}건');
+      print('레슨 예약: ${lsOrders.length}건');
+      print('레슨 카운팅: ${lsCountings.length}건');
+      print('타석 차감: ${billTimes.length}건');
+      
+      // Supabase 초기화 보장
+      await SupabaseAdapter.initialize();
+      
+      // PostgreSQL 트랜잭션 함수 호출
+      final result = await SupabaseAdapter.callRpc(
+        functionName: 'insert_special_reservation',
+        params: {
+          'p_ts_records': tsRecords,
+          'p_ls_orders': lsOrders,
+          'p_ls_countings': lsCountings,
+          'p_bill_times': billTimes,
+        },
+      );
+      
+      print('');
+      if (result['success'] == true) {
+        print('✅ 특수 예약 트랜잭션 성공!');
+        print('  - 타석 저장: ${result['inserted_ts_ids']}');
+        print('  - 레슨 저장: ${result['inserted_ls_ids']}');
+        print('  - 차감 저장: ${result['inserted_bill_ids']}');
+        print('  - 카운팅 저장: ${result['inserted_counting_ids']}');
+      } else {
+        print('❌ 특수 예약 트랜잭션 실패: ${result['error']}');
+        if (result['is_duplicate'] == true || result['isDuplicate'] == true) {
+          print('🚫 중복 예약 감지 - 모든 변경 롤백됨');
+        }
+      }
+      print('═══════════════════════════════════════════════════════════');
+      print('');
+      
       return result;
       
     } catch (e) {
-      print('레슨 예약 저장 실패: $e');
-      throw Exception('레슨 예약 저장 실패: $e');
+      print('❌ 특수 예약 트랜잭션 예외: $e');
+      final errorString = e.toString();
+      
+      final isDuplicate = errorString.contains('23505') || 
+                         errorString.contains('이미') ||
+                         errorString.contains('unique') ||
+                         errorString.contains('duplicate');
+      
+      return {
+        'success': false,
+        'error': errorString,
+        'isDuplicate': isDuplicate,
+        'errorMessage': isDuplicate 
+            ? '해당 시간대에 이미 예약이 존재합니다. 다른 시간을 선택해주세요.'
+            : '예약 저장 중 오류가 발생했습니다.',
+      };
     }
   }
 

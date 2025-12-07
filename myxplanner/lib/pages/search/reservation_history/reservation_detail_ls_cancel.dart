@@ -79,50 +79,72 @@ class LsReservationCancelService {
   static Future<bool> _updateLsOrdersStatus(String lsId) async {
     try {
       print('');
-      print('🔄 v2_LS_orders 상태 업데이트 시작');
+      print('┌─────────────────────────────────────────────────────────────┐');
+      print('│ 🔄 v2_LS_orders 상태 업데이트 시작                           │');
+      print('├─────────────────────────────────────────────────────────────┤');
+      print('│ 조회 조건: ls_id = $lsId');
       
       // 1. 현재 예약 정보 조회
       final currentData = await ApiService.getData(
         table: 'v2_LS_orders',
         where: [
-          {'field': 'LS_id', 'operator': '=', 'value': lsId}
+          {'field': 'ls_id', 'operator': '=', 'value': lsId}
         ],
         limit: 1,
       );
       
+      print('│ 조회 결과: ${currentData.length}건');
+      
       if (currentData.isEmpty) {
-        print('❌ 레슨 예약 정보를 찾을 수 없습니다: $lsId');
+        print('│ ❌ 레슨 예약 정보를 찾을 수 없습니다: $lsId');
+        print('└─────────────────────────────────────────────────────────────┘');
         return false;
       }
       
       final order = currentData.first;
-      print('현재 레슨 상태: ${order['LS_status']}');
+      print('│ [v2_LS_orders 조회 데이터]');
+      print('│   - LS_id: ${order['LS_id']}');
+      print('│   - LS_date: ${order['LS_date']}');
+      print('│   - LS_start_time: ${order['LS_start_time']}');
+      print('│   - LS_end_time: ${order['LS_end_time']}');
+      print('│   - LS_status: ${order['LS_status']}');
+      print('│   - LS_net_min: ${order['LS_net_min']}');
+      print('│   - member_name: ${order['member_name']}');
+      print('│   - pro_name: ${order['pro_name']}');
       
-      // 이미 취소된 예약인지 확인
-      if (order['LS_status'] == '예약취소') {
-        print('⚠️ 이미 취소된 레슨 예약입니다');
+      // supabase_adapter가 LS_로 복원함
+      final currentStatus = order['LS_status'];
+      print('│ 현재 상태: $currentStatus');
+      
+      if (currentStatus == '예약취소') {
+        print('│ ⚠️ 이미 취소된 레슨 예약입니다');
+        print('└─────────────────────────────────────────────────────────────┘');
         return true;
       }
       
       // 2. 상태를 '예약취소'로 업데이트
+      print('│ 상태 업데이트 시도: ls_status → 예약취소');
       final updateResult = await ApiService.updateData(
         table: 'v2_LS_orders',
         where: [
-          {'field': 'LS_id', 'operator': '=', 'value': lsId}
+          {'field': 'ls_id', 'operator': '=', 'value': lsId}
         ],
         data: {
-          'LS_status': '예약취소',
+          'ls_status': '예약취소',
           'updated_at': DateTime.now().toIso8601String(),
         },
       );
       
+      print('│ 업데이트 결과: $updateResult');
       final updateSuccess = updateResult['success'] == true;
       
       if (updateSuccess) {
-        print('✅ v2_LS_orders 상태 업데이트 성공');
+        print('│ ✅ v2_LS_orders 상태 업데이트 성공');
+        print('└─────────────────────────────────────────────────────────────┘');
         return true;
       } else {
-        print('❌ v2_LS_orders 상태 업데이트 실패');
+        print('│ ❌ v2_LS_orders 상태 업데이트 실패');
+        print('└─────────────────────────────────────────────────────────────┘');
         return false;
       }
       
@@ -554,59 +576,96 @@ class LsReservationCancelService {
   static Future<bool> _cancelLsCountingsRecord(String lsId, DateTime reservationStartTime, {int? programPenaltyPercent}) async {
     try {
       print('');
-      print('🔄 v3_LS_countings 취소 처리 시작 (LS_id: $lsId)');
+      print('┌─────────────────────────────────────────────────────────────┐');
+      print('│ 🔄 v3_LS_countings 취소 처리 시작                            │');
+      print('├─────────────────────────────────────────────────────────────┤');
+      print('│ [입력 파라미터]');
+      print('│   - ls_id: $lsId');
+      print('│   - 예약 시작 시간: $reservationStartTime');
+      print('│   - 프로그램 페널티: $programPenaltyPercent');
       
       // 0. 취소 정책 조회 (프로그램 페널티가 있으면 우선 적용)
       int penaltyPercent;
       if (programPenaltyPercent != null) {
         penaltyPercent = programPenaltyPercent;
-        print('프로그램 통합 페널티 적용: ${penaltyPercent}%');
+        print('│ 프로그램 통합 페널티 적용: ${penaltyPercent}%');
       } else {
         final policy = await _getCancellationPolicy('v3_LS_countings', reservationStartTime);
+        print('│ 취소 정책 조회 결과: $policy');
         if (!policy['canCancel']) {
-          print('❌ 취소가 불가능한 상태입니다');
+          print('│ ❌ 취소가 불가능한 상태입니다');
+          print('└─────────────────────────────────────────────────────────────┘');
           return false;
         }
         penaltyPercent = policy['penaltyPercent'] as int;
       }
       final isPenaltyApplicable = penaltyPercent > 0;
       
-      print('적용 페널티: ${penaltyPercent}%');
+      print('│ 적용 페널티: ${penaltyPercent}%');
+      print('├─────────────────────────────────────────────────────────────┤');
       
       // 1. 취소 대상 LS_counting 정보 조회
+      print('│ [v3_LS_countings 조회]');
+      print('│   조회 조건: ls_id = $lsId');
       final targetCountingData = await ApiService.getData(
         table: 'v3_LS_countings',
         where: [
-          {'field': 'LS_id', 'operator': '=', 'value': lsId}
+          {'field': 'ls_id', 'operator': '=', 'value': lsId}
         ],
         limit: 1,
       );
       
+      print('│   조회 결과: ${targetCountingData.length}건');
+      
       if (targetCountingData.isEmpty) {
-        print('❌ 취소 대상 LS_counting을 찾을 수 없습니다: $lsId');
+        print('│ ❌ 취소 대상 LS_counting을 찾을 수 없습니다: $lsId');
+        print('└─────────────────────────────────────────────────────────────┘');
         return false;
       }
       
       final targetCounting = targetCountingData.first;
+      print('│ [조회된 v3_LS_countings 데이터]');
+      print('│   - LS_counting_id: ${targetCounting['LS_counting_id']}');
+      print('│   - LS_id: ${targetCounting['LS_id']}');
+      print('│   - LS_contract_id: ${targetCounting['LS_contract_id']}');
+      print('│   - contract_history_id: ${targetCounting['contract_history_id']}');
+      print('│   - LS_date: ${targetCounting['LS_date']}');
+      print('│   - LS_status: ${targetCounting['LS_status']}');
+      print('│   - LS_balance_min_before: ${targetCounting['LS_balance_min_before']}');
+      print('│   - LS_net_min: ${targetCounting['LS_net_min']}');
+      print('│   - LS_balance_min_after: ${targetCounting['LS_balance_min_after']}');
+      
+      // supabase_adapter가 LS_로 복원함
       final lsCountingId = targetCounting['LS_counting_id'];
       final lsContractId = targetCounting['LS_contract_id'];
+      final contractHistoryId = targetCounting['contract_history_id'];
       
-      print('취소 대상 LS_counting_id: $lsCountingId');
-      print('취소 대상 LS_contract_id: $lsContractId');
+      print('│');
+      print('│ [사용할 ID 값들]');
+      print('│   - LS_counting_id: $lsCountingId');
+      print('│   - LS_contract_id: $lsContractId');
+      print('│   - contract_history_id: $contractHistoryId');
       
-      // 2. 동일 LS_contract_id에서 해당 LS_counting_id 이상인 모든 레코드 조회
+      // 2. 동일 contract_history_id에서 해당 ls_counting_id 이상인 모든 레코드 조회
+      // (ls_contract_id가 null일 수 있으므로 contract_history_id 사용)
+      if (contractHistoryId == null) {
+        print('│ ❌ contract_history_id가 null입니다');
+        print('└─────────────────────────────────────────────────────────────┘');
+        return false;
+      }
+      
       final affectedCountings = await ApiService.getData(
         table: 'v3_LS_countings',
         where: [
-          {'field': 'LS_contract_id', 'operator': '=', 'value': lsContractId},
-          {'field': 'LS_counting_id', 'operator': '>=', 'value': lsCountingId},
+          {'field': 'contract_history_id', 'operator': '=', 'value': contractHistoryId},
+          {'field': 'ls_counting_id', 'operator': '>=', 'value': lsCountingId},
         ],
         orderBy: [
-          {'field': 'LS_counting_id', 'direction': 'ASC'}
+          {'field': 'ls_counting_id', 'direction': 'ASC'}
         ],
       );
       
-      print('영향받는 레코드 수: ${affectedCountings.length}개');
+      print('│ 영향받는 레코드 수: ${affectedCountings.length}개');
       
       if (affectedCountings.isEmpty) {
         print('❌ 영향받는 레코드가 없습니다');
@@ -615,24 +674,26 @@ class LsReservationCancelService {
       
       // 3. 첫 번째 레코드 (취소 대상) 처리
       final cancelTarget = affectedCountings.first;
+      // supabase_adapter가 LS_로 복원함
       final originalBeforeBalance = cancelTarget['LS_balance_min_before'] ?? 0;
       final originalNetMin = cancelTarget['LS_net_min'] ?? 0;
+      final cancelTargetId = cancelTarget['LS_counting_id'];
       
-      print('취소 대상 처리: LS_counting_id ${cancelTarget['LS_counting_id']}');
+      print('취소 대상 처리: ls_counting_id $cancelTargetId');
       print('  원래 before_balance: $originalBeforeBalance');
-      print('  원래 LS_net_min: $originalNetMin');
+      print('  원래 ls_net_min: $originalNetMin');
       
-      // 빈 슬롯 처리: before_balance나 LS_net_min이 null이면 취소 처리 스킵
+      // 빈 슬롯 처리: before_balance나 ls_net_min이 null이면 취소 처리 스킵
       if (originalBeforeBalance == null || originalBeforeBalance == 0) {
         print('⚠️ 빈 슬롯 또는 잔액이 0인 레코드 - 단순 상태 변경만 수행');
         
         final updateResult = await ApiService.updateData(
           table: 'v3_LS_countings',
           where: [
-            {'field': 'LS_counting_id', 'operator': '=', 'value': cancelTarget['LS_counting_id']}
+            {'field': 'ls_counting_id', 'operator': '=', 'value': cancelTargetId}
           ],
           data: {
-            'LS_status': '예약취소',
+            'ls_status': '예약취소',
             'updated_at': DateTime.now().toIso8601String(),
           },
         );
@@ -650,7 +711,7 @@ class LsReservationCancelService {
       }
       
       Map<String, dynamic> updateData = {
-        'LS_status': '예약취소',
+        'ls_status': '예약취소',
         'updated_at': DateTime.now().toIso8601String(),
       };
       
@@ -663,14 +724,14 @@ class LsReservationCancelService {
         print('  새로운 after_balance: $newAfterBalance');
         
         updateData.addAll({
-          'LS_net_min': penaltyNetMin,
-          'LS_balance_min_after': newAfterBalance,
+          'ls_net_min': penaltyNetMin,
+          'ls_balance_min_after': newAfterBalance,
         });
       } else {
         // 무료 취소: 원래 로직 적용
         updateData.addAll({
-          'LS_net_min': 0,
-          'LS_balance_min_after': originalBeforeBalance,
+          'ls_net_min': 0,
+          'ls_balance_min_after': originalBeforeBalance,
         });
       }
       
@@ -678,7 +739,7 @@ class LsReservationCancelService {
       final cancelResult = await ApiService.updateData(
         table: 'v3_LS_countings',
         where: [
-          {'field': 'LS_counting_id', 'operator': '=', 'value': cancelTarget['LS_counting_id']}
+          {'field': 'ls_counting_id', 'operator': '=', 'value': cancelTargetId}
         ],
         data: updateData,
       );
@@ -700,29 +761,35 @@ class LsReservationCancelService {
           final currentCounting = affectedCountings[i];
           final previousCounting = affectedCountings[i - 1];
           
+          // supabase_adapter가 LS_로 복원함
+          final prevAfterBalance = previousCounting['LS_balance_min_after'];
+          final currCountingId = currentCounting['LS_counting_id'];
+          final currBeforeBal = currentCounting['LS_balance_min_before'];
+          final currAfterBal = currentCounting['LS_balance_min_after'];
+          final netMin = currentCounting['LS_net_min'] ?? 0;
+          
           // 이전 레코드의 after_balance를 현재 레코드의 before_balance로 설정
           final newBeforeBalance = i == 1 
             ? (isPenaltyApplicable 
                 ? originalBeforeBalance - (originalNetMin * penaltyPercent / 100).round()
                 : originalBeforeBalance)  // 첫 번째 후속 레코드는 취소된 레코드의 after_balance 사용
-            : previousCounting['LS_balance_min_after'];
+            : prevAfterBalance;
           
-          final netMin = currentCounting['LS_net_min'] ?? 0;
           final newAfterBalance = newBeforeBalance - netMin; // 레슨은 차감이므로 빼기
           
-          print('  레코드 ${i + 1}: LS_counting_id ${currentCounting['LS_counting_id']}');
-          print('    before: ${currentCounting['LS_balance_min_before']} → $newBeforeBalance');
-          print('    LS_net_min: $netMin');
-          print('    after: ${currentCounting['LS_balance_min_after']} → $newAfterBalance');
+          print('  레코드 ${i + 1}: ls_counting_id $currCountingId');
+          print('    before: $currBeforeBal → $newBeforeBalance');
+          print('    ls_net_min: $netMin');
+          print('    after: $currAfterBal → $newAfterBalance');
           
           final updateResult = await ApiService.updateData(
             table: 'v3_LS_countings',
             where: [
-              {'field': 'LS_counting_id', 'operator': '=', 'value': currentCounting['LS_counting_id']}
+              {'field': 'ls_counting_id', 'operator': '=', 'value': currCountingId}
             ],
             data: {
-              'LS_balance_min_before': newBeforeBalance,
-              'LS_balance_min_after': newAfterBalance,
+              'ls_balance_min_before': newBeforeBalance,
+              'ls_balance_min_after': newAfterBalance,
               'updated_at': DateTime.now().toIso8601String(),
             },
           );
@@ -730,11 +797,11 @@ class LsReservationCancelService {
           final updateSuccess = updateResult['success'] == true;
           
           if (!updateSuccess) {
-            print('❌ 레코드 ${currentCounting['LS_counting_id']} 업데이트 실패');
+            print('❌ 레코드 $currCountingId 업데이트 실패');
             return false;
           }
           
-          // 다음 반복을 위해 현재 레코드의 after_balance 업데이트
+          // 다음 반복을 위해 현재 레코드의 after_balance 업데이트 (대문자 키 사용)
           affectedCountings[i]['LS_balance_min_after'] = newAfterBalance;
         }
         

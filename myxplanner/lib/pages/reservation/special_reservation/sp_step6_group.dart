@@ -1750,27 +1750,17 @@ class _SpStep6GroupState extends State<SpStep6Group> {
             print('   ✅ 새로운 v2_bill_times 생성 완료');
             
             // v2_bill_times 생성 후 bill_min_id 가져와서 v2_priced_TS 업데이트
+            // addData에서 직접 반환된 insertId 사용 (불필요한 SELECT 쿼리 제거)
             if (member['new_priced_ts_created'] == true) {
               try {
-                // 방금 생성된 v2_bill_times의 bill_min_id 조회
-                final newBillTimes = await ApiService.getData(
-                  table: 'v2_bill_times',
-                  where: [
-                    {'field': 'reservation_id', 'operator': '=', 'value': reservationId},
-                    {'field': 'member_id', 'operator': '=', 'value': memberId},
-                    {'field': 'branch_id', 'operator': '=', 'value': branchId},
-                  ],
-                  orderBy: [{'field': 'bill_min_id', 'direction': 'DESC'}],
-                  limit: 1,
-                );
+                // addData 결과에서 직접 bill_min_id 가져오기
+                final billMinId = billTimesResult['insertId'];
                 
-                if (newBillTimes.isNotEmpty) {
-                  final billMinId = newBillTimes.first['bill_min_id'];
-                  
+                if (billMinId != null) {
                   // v2_priced_TS에 bill_min_id 업데이트
                   await ApiService.updateData(
                     table: 'v2_priced_TS',
-                    data: {'bill_min_id': billMinId},
+                    data: {'bill_min_id': billMinId.toString()},
                     where: [
                       {'field': 'reservation_id', 'operator': '=', 'value': reservationId},
                       {'field': 'member_id', 'operator': '=', 'value': memberId},
@@ -1778,6 +1768,8 @@ class _SpStep6GroupState extends State<SpStep6Group> {
                     ],
                   );
                   print('   ✅ v2_priced_TS에 bill_min_id(${billMinId}) 연결 완료');
+                } else {
+                  print('   ⚠️ v2_bill_times 생성은 성공했으나 bill_min_id를 가져오지 못함');
                 }
               } catch (e) {
                 print('   ⚠️ v2_priced_TS bill_min_id 연결 실패: $e');

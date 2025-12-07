@@ -1174,7 +1174,7 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
     }
     
     try {
-      await SpDbUpdateService.updateDatabaseForReservation(
+      final dbUpdateSuccess = await SpDbUpdateService.updateDatabaseForReservation(
         selectedDate: _selectedDate!,
         selectedProId: _selectedInstructorId!,
         selectedProName: _selectedInstructorName!,
@@ -1185,6 +1185,19 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
         specialType: widget.specialType,
         selectedMember: widget.selectedMember,
       );
+      
+      if (!dbUpdateSuccess) {
+        print('❌ DB 업데이트 실패');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('예약 저장 중 오류가 발생했습니다. 해당 시간대에 이미 예약이 있을 수 있습니다.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
       
       print('✅ DB 업데이트 완료');
       

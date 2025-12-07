@@ -271,36 +271,22 @@ class SupabaseAdapter {
           .single();
       
       // insertId 추출 (테이블의 primary key)
-      // 주의: 순서가 중요함! 특정 테이블의 primary key를 먼저 체크
-      final insertId = response['contract_history_id'] ??  // v3_contract_history
-                       response['ls_counting_id'] ??       // v3_ls_countings
-                       response['bill_id'] ??              // v2_bills
-                       response['bill_term_id'] ??
-                       response['term_hold_id'] ??
-                       response['bill_min_id'] ??
-                       response['bill_game_id'] ??
-                       response['group_play_id'] ??
-                       response['coupon_id'] ??
-                       response['trigger_id'] ??
-                       response['memberboard_id'] ??
-                       response['reply_id'] ??
-                       response['member_id'] ??            // member_id는 나중에
-                       response['contract_id'] ??
-                       response['board_id'] ??
-                       response['comment_id'] ??
-                       response['locker_id'] ??
-                       response['locker_bill_id'] ??
-                       response['msg_id'] ??
-                       response['portone_payment_id'] ??
-                       response['scheduled_staff_id'] ??
-                       response['pro_contract_id'] ??
-                       response['manager_contract_id'] ??
-                       response['term_id'] ??
-                       response['pc_id'] ??
-                       response['member_pro_relation_id'] ??
-                       response['id'] ??
-                       response['reservation_id'] ??
-                       'unknown';
+      // _tableAutoIncrementColumns 맵을 활용하여 테이블별로 정확한 PK 반환
+      // 기존 방식은 response에서 순차적으로 체크하다 보니 contract_history_id가
+      // bill_id보다 먼저 체크되어 v2_bills 테이블에서 잘못된 값이 반환되는 버그가 있었음
+      dynamic insertId;
+      
+      final pkColumns = _tableAutoIncrementColumns[tableName];
+      if (pkColumns != null && pkColumns.isNotEmpty) {
+        // 해당 테이블의 PK 컬럼 값을 직접 추출
+        insertId = response[pkColumns.first];
+        print('📌 [CRM] 테이블 $tableName의 PK 컬럼 ${pkColumns.first}에서 insertId 추출: $insertId');
+      }
+      
+      // PK를 못 찾으면 fallback 로직 사용
+      insertId ??= response['id'] ??
+                   response['reservation_id'] ??
+                   'unknown';
       
       print('✅ [CRM] Supabase INSERT 성공 - insertId: $insertId');
       
@@ -647,6 +633,57 @@ class SupabaseAdapter {
         '${dt.hour.toString().padLeft(2, '0')}:'
         '${dt.minute.toString().padLeft(2, '0')}:'
         '${dt.second.toString().padLeft(2, '0')}';
+  }
+  
+  // ========== RPC 함수 호출 (트랜잭션 지원) ==========
+  
+  /// PostgreSQL 함수(RPC) 호출
+  /// 트랜잭션이 필요한 복합 작업에 사용
+  static Future<Map<String, dynamic>> callRpc({
+    required String functionName,
+    Map<String, dynamic>? params,
+  }) async {
+    try {
+      print('🔄 [RPC] $functionName 호출');
+      print('📦 [RPC] 파라미터: $params');
+      
+      final response = await client.rpc(functionName, params: params);
+      
+      print('✅ [RPC] $functionName 응답: $response');
+      
+      // PostgreSQL 함수가 JSONB를 반환하면 Map으로 파싱
+      if (response is Map<String, dynamic>) {
+        return response;
+      } else if (response is String) {
+        // JSON 문자열인 경우 파싱
+        try {
+          return Map<String, dynamic>.from(
+            (response as dynamic).toString().isNotEmpty 
+              ? Map.from(response as dynamic) 
+              : {'success': true}
+          );
+        } catch (e) {
+          return {'success': true, 'data': response};
+        }
+      } else {
+        return {'success': true, 'data': response};
+      }
+    } catch (e) {
+      print('❌ [RPC] $functionName 오류: $e');
+      final errorString = e.toString();
+      
+      // 중복/충돌 에러 감지
+      final isDuplicate = errorString.contains('23505') || 
+                         errorString.contains('이미') ||
+                         errorString.contains('unique') ||
+                         errorString.contains('duplicate');
+      
+      return {
+        'success': false,
+        'error': errorString,
+        'isDuplicate': isDuplicate,
+      };
+    }
   }
 }
 

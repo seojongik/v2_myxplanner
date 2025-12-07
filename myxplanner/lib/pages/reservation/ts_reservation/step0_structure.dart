@@ -572,11 +572,19 @@ class _Step0StructureState extends State<Step0Structure> with TickerProviderStat
             dayOfWeek: queryDayOfWeek, // 요금 계산에 사용된 day_of_week 값 전달
           );
           
-          if (result['success']) {
+          if (result['success'] == true) {
             _showCompletionDialog(
               usedCoupons: result['usedCoupons'] ?? [],
               issuedCoupons: result['issuedCoupons'] ?? [],
             );
+          } else {
+            // 예약 실패 처리
+            final errorMessage = result['errorMessage']?.toString() ?? '예약 처리 중 오류가 발생했습니다.';
+            final errorType = result['errorType']?.toString() ?? 'unknown';
+            
+            print('❌ 예약 실패 - 타입: $errorType, 메시지: $errorMessage');
+            _showErrorSnackBar(errorMessage);
+            return; // 예약 실패 시 완료 처리하지 않음
           }
         } catch (e) {
           print('❌ 데이터베이스 업데이트 오류: $e');

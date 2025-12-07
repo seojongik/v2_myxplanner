@@ -103,14 +103,16 @@ class Step7DbUpdates {
       print('업데이트 데이터: $pricedTsData');
       
       // API 호출하여 테이블 업데이트
-      final success = await ApiService.updatePricedTsTable(pricedTsData);
+      final result = await ApiService.updatePricedTsTable(pricedTsData);
       
-      if (success) {
+      if (result['success'] == true) {
         print('✅ v2_priced_TS 테이블 업데이트 성공');
-        
         return true;
       } else {
-        print('❌ v2_priced_TS 테이블 업데이트 실패');
+        print('❌ v2_priced_TS 테이블 업데이트 실패: ${result['error']}');
+        if (result['isDuplicate'] == true) {
+          print('🚫 중복 예약 감지');
+        }
         return false;
       }
       
@@ -288,7 +290,32 @@ class Step7DbUpdates {
       print('🗓️ 요금 계산에 사용된 day_of_week: $dayOfWeek');
       print('업데이트 데이터: $pricedTsData');
 
-      await ApiService.updatePricedTsTable(pricedTsData);
+      // DB INSERT 실행 및 결과 확인
+      final insertResult = await ApiService.updatePricedTsTable(pricedTsData);
+      
+      if (insertResult['success'] != true) {
+        // DB 레벨에서 중복 감지 (트리거 또는 unique constraint)
+        if (insertResult['isDuplicate'] == true) {
+          print('🚫 DB 레벨에서 중복 예약 감지: ${insertResult['error']}');
+          return {
+            'success': false,
+            'usedCoupons': [],
+            'issuedCoupons': [],
+            'errorType': 'duplicate',
+            'errorMessage': '해당 시간대에 이미 예약이 존재합니다. 다른 시간을 선택해주세요.',
+          };
+        }
+        
+        // 기타 DB 에러
+        print('❌ v2_priced_TS 테이블 업데이트 실패: ${insertResult['error']}');
+        return {
+          'success': false,
+          'usedCoupons': [],
+          'issuedCoupons': [],
+          'errorType': 'db_error',
+          'errorMessage': '예약 저장 중 오류가 발생했습니다. 다시 시도해주세요.',
+        };
+      }
       
       // 생성된 bill_id와 bill_min_id를 수집하기 위한 리스트
       List<int> billIds = [];

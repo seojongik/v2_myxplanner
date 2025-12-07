@@ -625,7 +625,7 @@ class _LsStep0StructureState extends State<LsStep0Structure> with TickerProvider
       final lsId = '${dateStr}_${_selectedInstructorId!}_$timeStr';
 
       // v2_LS_orders: 레슨 예약 저장 (1건)
-      await ApiService.saveLessonOrder(
+      final lessonOrderResult = await ApiService.saveLessonOrder(
         selectedDate: _selectedDate!,
         selectedTime: _selectedTime!,
         proId: _selectedInstructorId!,
@@ -637,6 +637,22 @@ class _LsStep0StructureState extends State<LsStep0Structure> with TickerProvider
         request: _selectedRequest,
         branchId: widget.branchId,
       );
+      
+      // 레슨 예약 저장 실패 시 처리
+      if (lessonOrderResult['success'] != true) {
+        print('❌ 레슨 예약 저장 실패');
+        if (mounted) {
+          final errorMessage = lessonOrderResult['errorMessage']?.toString() 
+              ?? '레슨 예약 저장 중 오류가 발생했습니다.';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
       // v3_LS_countings: 레슨 카운팅 데이터 저장 (레슨권별로 저장)
       if (_selectedMembership != null) {

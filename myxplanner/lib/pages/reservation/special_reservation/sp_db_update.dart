@@ -25,7 +25,9 @@ class SpDbUpdateService {
     };
   }
 
-  /// 메인 DB 업데이트 함수
+  /// 메인 DB 업데이트 함수 (트랜잭션 방식)
+  /// 모든 데이터를 수집한 후 한 번에 원자적으로 처리
+  /// → 타석 + 레슨이 모두 성공해야 커밋, 하나라도 실패하면 전체 롤백
   static Future<bool> updateDatabaseForReservation({
     required DateTime selectedDate,
     required int selectedProId,
@@ -40,7 +42,7 @@ class SpDbUpdateService {
     try {
       print('');
       print('═══════════════════════════════════════════════════════════');
-      print('특수 예약 DB 업데이트 시작');
+      print('🔐 특수 예약 트랜잭션 DB 업데이트 시작');
       print('═══════════════════════════════════════════════════════════');
       
       // 예약 정보 출력
@@ -60,9 +62,15 @@ class SpDbUpdateService {
         selectedMember: selectedMember,
       );
 
-      bool allSuccess = true;
+      // ============================================================
+      // 트랜잭션용 데이터 수집 (INSERT 안함, 데이터만 준비)
+      // ============================================================
+      List<Map<String, dynamic>> tsRecords = [];      // 타석 예약 데이터
+      List<Map<String, dynamic>> billTimes = [];      // 타석 차감 데이터
+      List<Map<String, dynamic>> lsOrders = [];       // 레슨 예약 데이터
+      List<Map<String, dynamic>> lsCountings = [];    // 레슨 카운팅 데이터
 
-      // 1. 타석 시간이 있는 경우 v2_priced_TS, v2_bill_times 테이블 업데이트
+      // 1. 타석 시간이 있는 경우 데이터 수집
       final tsMin = _getTotalTsMin(specialSettings);
       if (tsMin > 0 && selectedContract['time_balance'] != null) {
         final timeSlotAnalysis = await _classifyProgramTimeSlot(
@@ -79,23 +87,22 @@ class SpDbUpdateService {
           specialSettings: specialSettings,
         );
 
-        // v2_priced_TS 테이블 업데이트
-        final pricedTsSuccess = await _updatePricedTsTable(
+        // 타석 예약 데이터 수집
+        tsRecords = await _collectTsRecords(
           reservationId: reservationId,
           timeSlotAnalysis: timeSlotAnalysis,
           selectedDate: selectedDate,
           selectedTime: selectedTime,
           selectedTsId: selectedTsId,
           selectedProId: selectedProId,
+          selectedProName: selectedProName,
           specialSettings: specialSettings,
           specialType: specialType,
           selectedMember: selectedMember,
         );
         
-        if (!pricedTsSuccess) allSuccess = false;
-
-        // v2_bill_times 테이블 업데이트 및 AI PK 수집
-        final billTimesResult = await _updateBillTimesTableWithPkCollection(
+        // 타석 차감 데이터 수집
+        billTimes = await _collectBillTimes(
           reservationId: reservationId,
           contract: selectedContract,
           selectedDate: selectedDate,
@@ -104,24 +111,9 @@ class SpDbUpdateService {
           specialSettings: specialSettings,
           selectedMember: selectedMember,
         );
-        
-        if (!billTimesResult['success']) {
-          allSuccess = false;
-        } else {
-          // 수집된 AI PK를 v2_priced_TS에 개별 매핑하여 저장
-          final billMinIds = billTimesResult['billMinIds'] as List<int>? ?? [];
-          final reservationIds = billTimesResult['reservationIds'] as List<String>? ?? [];
-          
-          if (billMinIds.isNotEmpty && reservationIds.isNotEmpty) {
-            await _updatePricedTsWithIndividualBillIds(
-              reservationIds: reservationIds,
-              billMinIds: billMinIds,
-            );
-          }
-        }
       }
 
-      // 2. 레슨 시간이 있는 경우 v2_LS_orders, v3_LS_countings 테이블 업데이트
+      // 2. 레슨 시간이 있는 경우 데이터 수집
       final lsMin = _getTotalLsMin(specialSettings);
       if (lsMin > 0 && selectedContract['lesson_balance'] != null) {
         final reservationId = _generateReservationId(
@@ -131,8 +123,8 @@ class SpDbUpdateService {
           specialSettings: specialSettings,
         );
 
-        // v2_LS_orders 테이블 업데이트
-        final lsOrdersSuccess = await _updateLsOrdersTable(
+        // 레슨 예약 데이터 수집
+        lsOrders = await _collectLsOrders(
           reservationId: reservationId,
           contract: selectedContract,
           selectedDate: selectedDate,
@@ -144,10 +136,8 @@ class SpDbUpdateService {
           selectedMember: selectedMember,
         );
         
-        if (!lsOrdersSuccess) allSuccess = false;
-
-        // v3_LS_countings 테이블 업데이트
-        final lsCountingsSuccess = await _updateLsCountingsTable(
+        // 레슨 카운팅 데이터 수집
+        lsCountings = await _collectLsCountings(
           reservationId: reservationId,
           contract: selectedContract,
           selectedDate: selectedDate,
@@ -158,22 +148,604 @@ class SpDbUpdateService {
           specialSettings: specialSettings,
           selectedMember: selectedMember,
         );
-        
-        if (!lsCountingsSuccess) allSuccess = false;
       }
 
       print('');
-      print('═══════════════════════════════════════════════════════════');
-      print('특수 예약 DB 업데이트 완료: ${allSuccess ? "성공" : "실패"}');
-      print('═══════════════════════════════════════════════════════════');
-      print('');
+      print('📦 수집된 데이터:');
+      print('  - 타석 예약: ${tsRecords.length}건');
+      print('  - 타석 차감: ${billTimes.length}건');
+      print('  - 레슨 예약: ${lsOrders.length}건');
+      print('  - 레슨 카운팅: ${lsCountings.length}건');
 
-      return allSuccess;
+      // ============================================================
+      // 트랜잭션으로 한 번에 처리 (모두 성공 or 모두 롤백)
+      // ============================================================
+      final result = await ApiService.insertSpecialReservation(
+        tsRecords: tsRecords,
+        lsOrders: lsOrders,
+        lsCountings: lsCountings,
+        billTimes: billTimes,
+      );
+
+      if (result['success'] == true) {
+        print('');
+        print('═══════════════════════════════════════════════════════════');
+        print('✅ 특수 예약 트랜잭션 완료 - 모든 데이터 저장 성공!');
+        print('═══════════════════════════════════════════════════════════');
+        print('');
+        return true;
+      } else {
+        print('');
+        print('═══════════════════════════════════════════════════════════');
+        print('❌ 특수 예약 트랜잭션 실패 - 모든 변경 롤백됨');
+        print('  에러: ${result['error']}');
+        if (result['isDuplicate'] == true || result['is_duplicate'] == true) {
+          print('  🚫 중복 예약 감지됨');
+        }
+        print('═══════════════════════════════════════════════════════════');
+        print('');
+        return false;
+      }
 
     } catch (e) {
       print('❌ 특수 예약 DB 업데이트 오류: $e');
       return false;
     }
+  }
+
+  // ===========================================
+  // 트랜잭션용 데이터 수집 함수들 (INSERT 안함)
+  // ===========================================
+
+  /// 타석 예약 데이터 수집 (트랜잭션용)
+  static Future<List<Map<String, dynamic>>> _collectTsRecords({
+    required String reservationId,
+    required Map<String, dynamic> timeSlotAnalysis,
+    required DateTime selectedDate,
+    required String selectedTime,
+    required String selectedTsId,
+    required int selectedProId,
+    required String selectedProName,
+    required Map<String, dynamic> specialSettings,
+    required String? specialType,
+    Map<String, dynamic>? selectedMember,
+  }) async {
+    final List<Map<String, dynamic>> records = [];
+    
+    try {
+      final currentUser = selectedMember ?? ApiService.getCurrentUser();
+      if (currentUser == null) {
+        print('❌ 현재 사용자 정보를 가져올 수 없습니다.');
+        return records;
+      }
+
+      final memberId = currentUser['member_id']?.toString() ?? '';
+      final memberName = currentUser['member_name']?.toString() ?? '';
+      final memberType = currentUser['member_type']?.toString() ?? 'regular';
+      final branchId = ApiService.getCurrentBranchId();
+      final programId = _generateProgramId(selectedDate, selectedProId, selectedTime, specialSettings);
+      
+      // 타석 정보
+      final tsName = await _getTsName(selectedTsId);
+      final proName = selectedProName;
+      
+      // 시간 블록 분석
+      final timeBlocks = _parseTimeBlocks(specialSettings);
+      
+      DateTime? baseTime;
+      try {
+        baseTime = DateTime.parse('2025-01-01 ${selectedTime}:00');
+      } catch (e) {
+        baseTime = DateTime.parse('2025-01-01 ${selectedTime}');
+      }
+      
+      DateTime? currentTime = baseTime;
+      int tsBlockIndex = 0;
+      
+      for (final block in timeBlocks) {
+        if (currentTime == null) break;
+        
+        final blockType = block['type'] as String;
+        final duration = block['duration'] as int;
+        final blockEndTime = currentTime.add(Duration(minutes: duration));
+        
+        if (blockType == 'ts') {
+          tsBlockIndex++;
+          final startTimeStr = '${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}';
+          final endTimeStr = '${blockEndTime.hour.toString().padLeft(2, '0')}:${blockEndTime.minute.toString().padLeft(2, '0')}';
+          
+          final blockReservationId = '${reservationId}_ts$tsBlockIndex';
+          
+          // 타석 타입 및 상태 결정
+          String tsType = specialType ?? '프로그램';
+          String tsStatus = '예약완료';
+          
+          final tsRecord = {
+            'branch_id': branchId,
+            'reservation_id': blockReservationId,
+            'ts_id': selectedTsId,
+            'ts_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+            'ts_start': startTimeStr,
+            'ts_end': endTimeStr,
+            'ts_type': tsType,
+            'ts_status': tsStatus,
+            'ts_buffer': 0,
+            'member_id': memberId,
+            'member_name': memberName,
+            'member_type': memberType,
+            'pro_id': selectedProId,
+            'pro_name': proName,
+            'program_id': programId,
+            'routine_id': null,
+            'unit_price': 0,
+            'transaction_type': '회원권차감',
+          };
+          
+          records.add(tsRecord);
+          print('📦 타석 블록 $tsBlockIndex 수집: $startTimeStr ~ $endTimeStr');
+        }
+        
+        currentTime = blockEndTime;
+      }
+      
+      print('✅ 타석 데이터 ${records.length}건 수집 완료');
+      return records;
+      
+    } catch (e) {
+      print('❌ 타석 데이터 수집 오류: $e');
+      return records;
+    }
+  }
+
+  /// 타석 차감 데이터 수집 (트랜잭션용)
+  static Future<List<Map<String, dynamic>>> _collectBillTimes({
+    required String reservationId,
+    required Map<String, dynamic> contract,
+    required DateTime selectedDate,
+    required String selectedTime,
+    required String selectedTsId,
+    required Map<String, dynamic> specialSettings,
+    Map<String, dynamic>? selectedMember,
+  }) async {
+    final List<Map<String, dynamic>> records = [];
+    
+    try {
+      final currentUser = selectedMember ?? ApiService.getCurrentUser();
+      if (currentUser == null) return records;
+
+      final memberId = currentUser['member_id']?.toString() ?? '';
+      final branchId = ApiService.getCurrentBranchId();
+      final contractHistoryId = contract['contract_history_id'];
+      // 만료일: time_expiry > expiry_date 순으로 조회
+      final contractExpiryDate = contract['time_expiry']?.toString() ?? 
+                                  contract['expiry_date']?.toString() ?? '';
+      
+      // 잔액: contract에서 직접 가져오기 (이미 Step5에서 검증된 값)
+      int currentBalance = int.tryParse(contract['time_balance']?.toString() ?? '0') ?? 0;
+      print('📊 시간권 초기 잔액 (contract에서): $currentBalance분');
+      
+      // 시간 블록에서 타석 시간만 추출
+      final timeBlocks = _parseTimeBlocks(specialSettings);
+      int tsBlockIndex = 0;
+      DateTime currentTime = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        int.parse(selectedTime.split(':')[0]),
+        int.parse(selectedTime.split(':')[1]),
+      );
+      
+      for (final block in timeBlocks) {
+        if (block['type'] == 'ts') {
+          tsBlockIndex++;
+          final duration = block['duration'] as int;
+          final blockEndTime = currentTime.add(Duration(minutes: duration));
+          
+          final startTimeStr = '${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}';
+          final endTimeStr = '${blockEndTime.hour.toString().padLeft(2, '0')}:${blockEndTime.minute.toString().padLeft(2, '0')}';
+          final blockReservationId = '${reservationId}_ts$tsBlockIndex';
+          
+          // bill_text 생성 (예: "1번 타석(14:00 ~ 14:55)")
+          final billText = '${selectedTsId}번 타석($startTimeStr ~ $endTimeStr)';
+          
+          // 잔액 계산
+          final balanceBefore = currentBalance;
+          final balanceAfter = currentBalance - duration;
+          currentBalance = balanceAfter;
+          
+          final billTimeRecord = {
+            'branch_id': branchId,
+            'contract_history_id': contractHistoryId,
+            'bill_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+            'member_id': memberId,
+            'bill_text': billText,
+            'bill_type': '타석이용',
+            'reservation_id': blockReservationId,
+            'bill_total_min': duration,
+            'bill_discount_min': 0,
+            'bill_min': duration,
+            'bill_balance_min_before': balanceBefore,
+            'bill_balance_min_after': balanceAfter,
+            'bill_status': '결제완료',
+            'contract_ts_min_expiry_date': contractExpiryDate,
+          };
+          
+          records.add(billTimeRecord);
+          print('📦 타석 차감 블록 $tsBlockIndex 수집: ${duration}분 (잔액: $balanceBefore → $balanceAfter)');
+        }
+        currentTime = currentTime.add(Duration(minutes: block['duration'] as int));
+      }
+      
+      print('✅ 타석 차감 데이터 ${records.length}건 수집 완료');
+      return records;
+      
+    } catch (e) {
+      print('❌ 타석 차감 데이터 수집 오류: $e');
+      return records;
+    }
+  }
+
+  /// 레슨 예약 데이터 수집 (트랜잭션용)
+  static Future<List<Map<String, dynamic>>> _collectLsOrders({
+    required String reservationId,
+    required Map<String, dynamic> contract,
+    required DateTime selectedDate,
+    required int selectedProId,
+    required String selectedProName,
+    required String selectedTime,
+    required String selectedTsId,
+    required Map<String, dynamic> specialSettings,
+    Map<String, dynamic>? selectedMember,
+  }) async {
+    final List<Map<String, dynamic>> records = [];
+    
+    try {
+      final currentUser = selectedMember ?? ApiService.getCurrentUser();
+      if (currentUser == null) return records;
+
+      final memberId = currentUser['member_id']?.toString() ?? '';
+      final memberName = currentUser['member_name']?.toString() ?? '';
+      final memberType = currentUser['member_type']?.toString() ?? 'regular';
+      final branchId = ApiService.getCurrentBranchId();
+      final programId = _generateProgramId(selectedDate, selectedProId, selectedTime, specialSettings);
+      final lsContractId = contract['contract_history_id'];
+      final tsId = int.tryParse(selectedTsId) ?? 0;
+      
+      // 시간 블록 분석
+      final timeBlocks = _parseTimeBlocks(specialSettings);
+      
+      DateTime? baseTime;
+      try {
+        baseTime = DateTime.parse('2025-01-01 ${selectedTime}:00');
+      } catch (e) {
+        baseTime = DateTime.parse('2025-01-01 ${selectedTime}');
+      }
+      
+      DateTime? currentTime = baseTime;
+      int lessonBlockIndex = 0;
+      
+      // 그룹레슨 여부 확인
+      final maxPlayerNo = int.tryParse(specialSettings['max_player_no']?.toString() ?? '1') ?? 1;
+      final isGroupLesson = maxPlayerNo > 1;
+      
+      for (final block in timeBlocks) {
+        if (currentTime == null) break;
+        
+        final blockType = block['type'] as String;
+        final duration = block['duration'] as int;
+        final blockEndTime = currentTime.add(Duration(minutes: duration));
+        
+        if (blockType == 'lesson') {
+          lessonBlockIndex++;
+          final startTimeStr = '${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}';
+          final endTimeStr = '${blockEndTime.hour.toString().padLeft(2, '0')}:${blockEndTime.minute.toString().padLeft(2, '0')}';
+          
+          if (isGroupLesson) {
+            // 그룹 레슨: 슬롯별로 생성
+            for (int playerNo = 1; playerNo <= maxPlayerNo; playerNo++) {
+              final lsId = _generateLsIdForCollect(
+                lessonBlockIndex, currentTime, selectedDate, selectedProId, specialSettings, playerNo, maxPlayerNo
+              );
+              final isFirstSlot = (playerNo == 1);
+              
+              final lsOrderRecord = {
+                'branch_id': branchId,
+                'ls_id': lsId,
+                'ls_transaction_type': '레슨예약',
+                'ls_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                'member_id': isFirstSlot ? memberId : null,
+                'ls_status': isFirstSlot ? '결제완료' : '체크인전',
+                'member_name': isFirstSlot ? memberName : null,
+                'member_type': isFirstSlot ? memberType : null,
+                'ls_type': '프로그램',
+                'pro_id': selectedProId,
+                'pro_name': selectedProName,
+                'ls_order_source': '앱',
+                'ls_start_time': startTimeStr,
+                'ls_end_time': endTimeStr,
+                'ls_net_min': duration,
+                'ts_id': tsId,
+                'program_id': programId,
+                'routine_id': null,
+                'ls_request': null,
+                'ls_contract_id': isFirstSlot ? lsContractId : null,
+              };
+              
+              records.add(lsOrderRecord);
+              print('📦 레슨 블록 $lessonBlockIndex 슬롯 $playerNo/$maxPlayerNo 수집');
+            }
+          } else {
+            // 개인 레슨
+            final lsId = _generateLsIdForCollect(
+              lessonBlockIndex, currentTime, selectedDate, selectedProId, specialSettings, 1, 1
+            );
+            
+            final lsOrderRecord = {
+              'branch_id': branchId,
+              'ls_id': lsId,
+              'ls_transaction_type': '레슨예약',
+              'ls_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+              'member_id': memberId,
+              'ls_status': '결제완료',
+              'member_name': memberName,
+              'member_type': memberType,
+              'ls_type': '프로그램',
+              'pro_id': selectedProId,
+              'pro_name': selectedProName,
+              'ls_order_source': '앱',
+              'ls_start_time': startTimeStr,
+              'ls_end_time': endTimeStr,
+              'ls_net_min': duration,
+              'ts_id': tsId,
+              'program_id': programId,
+              'routine_id': null,
+              'ls_request': null,
+              'ls_contract_id': lsContractId,
+            };
+            
+            records.add(lsOrderRecord);
+            print('📦 레슨 블록 $lessonBlockIndex 수집: $startTimeStr ~ $endTimeStr');
+          }
+        }
+        
+        currentTime = blockEndTime;
+      }
+      
+      print('✅ 레슨 데이터 ${records.length}건 수집 완료');
+      return records;
+      
+    } catch (e) {
+      print('❌ 레슨 데이터 수집 오류: $e');
+      return records;
+    }
+  }
+
+  /// 레슨 카운팅 데이터 수집 (트랜잭션용)
+  static Future<List<Map<String, dynamic>>> _collectLsCountings({
+    required String reservationId,
+    required Map<String, dynamic> contract,
+    required DateTime selectedDate,
+    required int selectedProId,
+    required String selectedProName,
+    required String selectedTime,
+    required String selectedTsId,
+    required Map<String, dynamic> specialSettings,
+    Map<String, dynamic>? selectedMember,
+  }) async {
+    final List<Map<String, dynamic>> records = [];
+    
+    try {
+      final currentUser = selectedMember ?? ApiService.getCurrentUser();
+      if (currentUser == null) return records;
+
+      final memberId = currentUser['member_id']?.toString() ?? '';
+      final memberName = currentUser['member_name']?.toString() ?? '';
+      final memberType = currentUser['member_type']?.toString() ?? '일반';
+      final branchId = ApiService.getCurrentBranchId();
+      final contractHistoryId = contract['contract_history_id'];
+      // 만료일: lesson_expiry > ls_expiry_date > expiry_date 순으로 조회
+      final contractExpiryDate = contract['lesson_expiry']?.toString() ?? 
+                                  contract['ls_expiry_date']?.toString() ?? 
+                                  contract['expiry_date']?.toString() ?? '';
+      final programId = _generateProgramId(selectedDate, selectedProId, selectedTime, specialSettings);
+      
+      // 잔액: _getCurrentLessonBalance와 동일하게 DB에서 최신 잔액 조회 (Step5에서 검증된 방식)
+      int currentBalance = await _getCurrentLessonBalance(contract);
+      print('📊 레슨권 초기 잔액 (DB 조회): $currentBalance분');
+      
+      // 시간 블록에서 레슨만 추출
+      final timeBlocks = _parseTimeBlocks(specialSettings);
+      
+      DateTime? baseTime;
+      try {
+        baseTime = DateTime.parse('2025-01-01 ${selectedTime}:00');
+      } catch (e) {
+        baseTime = DateTime.parse('2025-01-01 ${selectedTime}');
+      }
+      
+      DateTime? currentTime = baseTime;
+      int lessonBlockIndex = 0;
+      
+      for (final block in timeBlocks) {
+        if (currentTime == null) break;
+        
+        final blockType = block['type'] as String;
+        final duration = block['duration'] as int;
+        final blockEndTime = currentTime.add(Duration(minutes: duration));
+        
+        if (blockType == 'lesson') {
+          lessonBlockIndex++;
+          
+          final lsId = _generateLsIdForCollect(
+            lessonBlockIndex, currentTime, selectedDate, selectedProId, specialSettings, 1, 1
+          );
+          
+          // 잔액 계산
+          final balanceBefore = currentBalance;
+          final balanceAfter = currentBalance - duration;
+          currentBalance = balanceAfter;
+          
+          final countingRecord = {
+            'branch_id': branchId,
+            'ls_id': lsId,
+            'ls_transaction_type': '레슨차감',
+            'ls_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+            'member_id': memberId,
+            'member_name': memberName,
+            'member_type': memberType,
+            'ls_status': '차감완료',
+            'ls_type': '프로그램',
+            'ls_contract_id': contractHistoryId,
+            'contract_history_id': contractHistoryId,
+            'ls_balance_min_before': balanceBefore,
+            'ls_net_min': duration,
+            'ls_balance_min_after': balanceAfter,
+            'ls_counting_source': '앱',
+            'program_id': programId,
+            'pro_id': selectedProId,
+            'pro_name': selectedProName,
+            'ls_expiry_date': contractExpiryDate,
+          };
+          
+          records.add(countingRecord);
+          print('📦 레슨 카운팅 블록 $lessonBlockIndex 수집: ${duration}분 (잔액: $balanceBefore → $balanceAfter)');
+        }
+        
+        currentTime = blockEndTime;
+      }
+      
+      print('✅ 레슨 카운팅 데이터 ${records.length}건 수집 완료');
+      return records;
+      
+    } catch (e) {
+      print('❌ 레슨 카운팅 데이터 수집 오류: $e');
+      return records;
+    }
+  }
+
+  /// LS_id 생성 (데이터 수집용)
+  static String _generateLsIdForCollect(
+    int sessionNum,
+    DateTime sessionTime,
+    DateTime selectedDate,
+    int proId,
+    Map<String, dynamic> specialSettings,
+    int playerNo,
+    int maxPlayerNo,
+  ) {
+    final dateStr = DateFormat('yyMMdd').format(selectedDate);
+    final timeStr = '${sessionTime.hour.toString().padLeft(2, '0')}${sessionTime.minute.toString().padLeft(2, '0')}';
+    
+    if (maxPlayerNo > 1) {
+      return '${dateStr}_${proId}_${timeStr}_$playerNo/$maxPlayerNo';
+    } else {
+      return '${dateStr}_${proId}_${timeStr}';
+    }
+  }
+
+  /// program_id 생성 헬퍼 함수
+  static String _generateProgramId(
+    DateTime selectedDate,
+    int selectedProId,
+    String selectedTime,
+    Map<String, dynamic> specialSettings,
+  ) {
+    final dateStr = selectedDate.toString().substring(2, 10).replaceAll('-', '');
+    final timeStr = selectedTime.replaceAll(':', '');
+    return '${dateStr}_${selectedProId}_$timeStr';
+  }
+
+  /// 타석 이름 조회 헬퍼 함수
+  static Future<String> _getTsName(String tsId) async {
+    // 간단히 "N번 타석" 형식으로 반환
+    return '${tsId}번 타석';
+  }
+
+  /// 시간 블록 파싱 헬퍼 함수 (specialSettings → timeBlocks)
+  static List<Map<String, dynamic>> _parseTimeBlocks(Map<String, dynamic> specialSettings) {
+    // ls_min과 ls_break_min, ts_min을 순서 번호 기준으로 수집
+    final Map<int, int> lsMinMap = {};
+    final Map<int, int> lsBreakMinMap = {};
+    final Map<int, int> tsMinMap = {};
+
+    specialSettings.forEach((key, value) {
+      if (key.startsWith('ls_min(') && key.endsWith(')')) {
+        final orderNum = int.tryParse(key.substring(7, key.length - 1)) ?? 0;
+        final duration = int.tryParse(value?.toString() ?? '0') ?? 0;
+        if (orderNum > 0 && duration > 0) {
+          lsMinMap[orderNum] = duration;
+        }
+      } else if (key.startsWith('ls_break_min(') && key.endsWith(')')) {
+        final orderNum = int.tryParse(key.substring(13, key.length - 1)) ?? 0;
+        final duration = int.tryParse(value?.toString() ?? '0') ?? 0;
+        if (orderNum > 0 && duration > 0) {
+          lsBreakMinMap[orderNum] = duration;
+        }
+      } else if (key.startsWith('ts_min(') && key.endsWith(')')) {
+        final orderNum = int.tryParse(key.substring(7, key.length - 1)) ?? 0;
+        final duration = int.tryParse(value?.toString() ?? '0') ?? 0;
+        if (orderNum > 0 && duration > 0) {
+          tsMinMap[orderNum] = duration;
+        }
+      } else if (key == 'ts_min') {
+        // 단일 ts_min의 경우 order 1로 처리
+        final duration = int.tryParse(value?.toString() ?? '0') ?? 0;
+        if (duration > 0) {
+          tsMinMap[1] = duration;
+        }
+      }
+    });
+
+    // 모든 순서 번호를 수집하고 정렬
+    final allOrderNumbers = <int>{};
+    allOrderNumbers.addAll(lsMinMap.keys);
+    allOrderNumbers.addAll(lsBreakMinMap.keys);
+    allOrderNumbers.addAll(tsMinMap.keys);
+    final sortedOrders = allOrderNumbers.toList()..sort();
+
+    // 순서대로 시간 블록 구성
+    final timeBlocks = <Map<String, dynamic>>[];
+    int lessonNumber = 1;
+    int tsNumber = 1;
+
+    for (final orderNum in sortedOrders) {
+      final breakTime = lsBreakMinMap[orderNum] ?? 0;
+      final lessonDuration = lsMinMap[orderNum] ?? 0;
+      final tsDuration = tsMinMap[orderNum] ?? 0;
+
+      // 휴식시간이 있으면 먼저 추가
+      if (breakTime > 0) {
+        timeBlocks.add({
+          'type': 'break',
+          'order': orderNum,
+          'duration': breakTime,
+        });
+      }
+
+      // 타석시간이 있으면 추가
+      if (tsDuration > 0) {
+        timeBlocks.add({
+          'type': 'ts',
+          'order': orderNum,
+          'ts_number': tsNumber,
+          'duration': tsDuration,
+        });
+        tsNumber++;
+      }
+
+      // 레슨시간이 있으면 추가
+      if (lessonDuration > 0) {
+        timeBlocks.add({
+          'type': 'lesson',
+          'order': orderNum,
+          'lesson_number': lessonNumber,
+          'duration': lessonDuration,
+        });
+        lessonNumber++;
+      }
+    }
+
+    return timeBlocks;
   }
 
   // ===========================================
@@ -579,13 +1151,18 @@ class SpDbUpdateService {
           print('reservation_id: $slotReservationId');
 
           // API 호출하여 테이블 업데이트
-          final success = await ApiService.updatePricedTsTable(slotPricedTsData);
+          final result = await ApiService.updatePricedTsTable(slotPricedTsData);
 
-          if (success) {
+          if (result['success'] == true) {
             print('✅ 슬롯 $playerNo/$maxPlayerNo v2_priced_TS 업데이트 성공');
           } else {
-            print('❌ 슬롯 $playerNo/$maxPlayerNo v2_priced_TS 업데이트 실패');
+            print('❌ 슬롯 $playerNo/$maxPlayerNo v2_priced_TS 업데이트 실패: ${result['error']}');
             allSuccess = false;
+            // 중복 에러인 경우 즉시 중단
+            if (result['isDuplicate'] == true) {
+              print('🚫 중복 예약 감지 - 처리 중단');
+              return false;
+            }
           }
         }
 
@@ -624,13 +1201,16 @@ class SpDbUpdateService {
         print('reservation_id: $reservationId');
 
         // API 호출하여 테이블 업데이트
-        final success = await ApiService.updatePricedTsTable(pricedTsData);
+        final result = await ApiService.updatePricedTsTable(pricedTsData);
 
-        if (success) {
+        if (result['success'] == true) {
           print('✅ v2_priced_TS 테이블 업데이트 성공');
           return true;
         } else {
-          print('❌ v2_priced_TS 테이블 업데이트 실패');
+          print('❌ v2_priced_TS 테이블 업데이트 실패: ${result['error']}');
+          if (result['isDuplicate'] == true) {
+            print('🚫 중복 예약 감지');
+          }
           return false;
         }
       }
@@ -960,8 +1540,14 @@ class SpDbUpdateService {
               if (success) {
                 print('✅ 레슨 ${lessonNum} 슬롯 $playerNo/$maxPlayerNo v2_LS_orders 업데이트 성공');
               } else {
-                print('❌ 레슨 ${lessonNum} 슬롯 $playerNo/$maxPlayerNo v2_LS_orders 업데이트 실패');
+                final errorMsg = result['message']?.toString() ?? '';
+                print('❌ 레슨 ${lessonNum} 슬롯 $playerNo/$maxPlayerNo v2_LS_orders 업데이트 실패: $errorMsg');
                 allSuccess = false;
+                // 중복 에러인 경우 즉시 중단
+                if (errorMsg.contains('23505') || errorMsg.contains('이미 레슨 예약이 존재합니다')) {
+                  print('🚫 레슨 중복 감지 - 처리 중단');
+                  return false;
+                }
               }
             }
           } else {
@@ -1011,8 +1597,14 @@ class SpDbUpdateService {
             if (success) {
               print('✅ 레슨 ${lessonNum} v2_LS_orders 업데이트 성공');
             } else {
-              print('❌ 레슨 ${lessonNum} v2_LS_orders 업데이트 실패');
+              final errorMsg = result['message']?.toString() ?? '';
+              print('❌ 레슨 ${lessonNum} v2_LS_orders 업데이트 실패: $errorMsg');
               allSuccess = false;
+              // 중복 에러인 경우 즉시 중단
+              if (errorMsg.contains('23505') || errorMsg.contains('이미 레슨 예약이 존재합니다')) {
+                print('🚫 레슨 중복 감지 - 처리 중단');
+                return false;
+              }
             }
           }
         } else {

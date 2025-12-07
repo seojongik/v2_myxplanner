@@ -72,17 +72,11 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   Future<void> _loadTabData() async {
     final tabInfo = _getCurrentTabInfo();
     if (tabInfo.isNotEmpty) {
-      print('🔄 탭 데이터 로드 시작: ${tabInfo['key']}');
       try {
         final policyInfo = await _getTabPolicyInfo(tabInfo['key']);
         final balance = await _getTabBalance(tabInfo['key']);
         final couponPreview = await _getCouponPreview();
         final issuedCouponPreview = await _getIssuedCouponPreview();
-        
-        print('🔄 새로운 정책 정보: ${policyInfo['refundAmount']}${policyInfo['unit']}');
-        print('🔄 새로운 잔액 정보: $balance');
-        print('🔄 새로운 사용 쿠폰 정보: ${couponPreview['coupons']?.length ?? 0}개');
-        print('🔄 새로운 발급 쿠폰 정보: ${issuedCouponPreview['coupons']?.length ?? 0}개');
         
         if (mounted) {
           setState(() {
@@ -100,11 +94,27 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
           });
         }
         
-        print('🔄 상태 업데이트 완료');
-        print('🔄 저장된 환불 시간: ${_currentTabPolicyInfo?['refundAmount']}');
-        print('🔄 저장된 잔액: $_currentTabBalance');
-        print('🔄 저장된 사용 쿠폰 수: ${_couponPreview?['coupons']?.length ?? 0}개');
-        print('🔄 저장된 발급 쿠폰 수: ${_issuedCouponPreview?['coupons']?.length ?? 0}개');
+        // ========== 환불 계산 결과 요약 ==========
+        print('');
+        print('╔══════════════════════════════════════════════════════════╗');
+        print('║  📋 예약취소 - 환불 계산 결과 요약                         ║');
+        print('╠══════════════════════════════════════════════════════════╣');
+        print('║  탭: ${tabInfo['key'].toString().padRight(10)} | 예약타입: ${widget.reservation['type'] ?? 'N/A'}');
+        print('║  예약일시: ${widget.reservation['date']} ${widget.reservation['startTime']}');
+        print('╠──────────────────────────────────────────────────────────╣');
+        print('║  🔸 페널티: ${policyInfo['penaltyPercent']}% (${policyInfo['penaltyAmount']}${policyInfo['unit']})');
+        print('║  🔹 환불예정: ${policyInfo['refundAmount']}${policyInfo['unit']}');
+        print('║  💰 현재잔액: $balance${policyInfo['unit']}');
+        print('║  💵 환불후잔액: ${(balance ?? 0) + (policyInfo['refundAmount'] ?? 0)}${policyInfo['unit']}');
+        print('╠──────────────────────────────────────────────────────────╣');
+        print('║  📌 상태: ${policyInfo['currentStatus']?.toString().replaceAll('\n', ' ') ?? 'N/A'}');
+        if (policyInfo['hasCouponDeduction'] == true) {
+          print('║  🎫 쿠폰차감: ${tabInfo['key'] == 'credit' ? '${policyInfo['couponDeductionAmt']}원' : '${policyInfo['couponDeductionMin']}분'}');
+        }
+        print('║  🎟️ 복구쿠폰: ${couponPreview['coupons']?.length ?? 0}개 | 취소쿠폰: ${issuedCouponPreview['coupons']?.length ?? 0}개');
+        print('╚══════════════════════════════════════════════════════════╝');
+        print('');
+        
       } catch (e) {
         print('❌ 탭 데이터 로드 오류: $e');
       }
@@ -1416,14 +1426,35 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
         print('  - 환불 시간: $refundAmount분');
         
       } else if (tabKey == 'lesson') {
-        // 시간 기반 계산 (레슨)
-        amount = widget.reservation['lessonDuration'] ?? 0;  // 레슨 시간(분)
+        // 시간 기반 계산 (레슨) - v3_LS_countings에서 LS_net_min 직접 조회
+        final lsId = widget.reservation['lsId']?.toString() ?? '';
+        
+        if (lsId.isNotEmpty) {
+          try {
+            final lsData = await ApiService.getData(
+              table: 'v3_LS_countings',
+              where: [
+                {'field': 'LS_id', 'operator': '=', 'value': lsId}
+              ],
+              limit: 1,
+            );
+            
+            if (lsData.isNotEmpty) {
+              amount = lsData.first['LS_net_min'] ?? 0;
+              print('  → v3_LS_countings에서 LS_net_min 조회: $amount분');
+            }
+          } catch (e) {
+            print('  → LS_net_min 조회 오류: $e');
+          }
+        }
+        
         penaltyAmount = (amount * appliedPenalty / 100).round();
         refundAmount = amount - penaltyAmount;
         unit = '분';
         
         print('레슨 환불 계산:');
-        print('  - 원본 시간: $amount분');
+        print('  - lsId: $lsId');
+        print('  - 원본 시간(LS_net_min): $amount분');
         print('  - 페널티 시간: $penaltyAmount분');
         print('  - 환불 시간: $refundAmount분');
       }
@@ -2754,6 +2785,9 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   }
 
   void _cancelReservation() async {
+    print('');
+    print('🚀 _cancelReservation() 호출됨');
+    
     setState(() {
       _isLoadingCancel = true;
     });
@@ -2762,16 +2796,36 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
       final reservation = widget.reservation;
       final reservationType = reservation['type'];
       final reservationId = reservation['reservationId']?.toString() ?? '';
+      final lsId = reservation['lsId']?.toString() ?? '';
       
-      if (reservationId.isEmpty) {
+      print('예약 타입: $reservationType');
+      print('reservationId: $reservationId');
+      print('lsId: $lsId');
+      
+      // 타입별로 필요한 ID 체크
+      if (reservationType == '타석' && reservationId.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('예약 ID를 찾을 수 없습니다.'),
+              content: Text('타석 예약 ID를 찾을 수 없습니다.'),
               backgroundColor: Colors.red,
             ),
           );
         }
+        setState(() => _isLoadingCancel = false);
+        return;
+      }
+      
+      if (reservationType == '레슨' && lsId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('레슨 예약 ID를 찾을 수 없습니다.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        setState(() => _isLoadingCancel = false);
         return;
       }
       

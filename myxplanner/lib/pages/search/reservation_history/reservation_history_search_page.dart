@@ -324,18 +324,18 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         });
       }
 
-      // 상태 조건: 결제완료만 또는 취소 포함
+      // 상태 조건: 결제완료/예약완료 또는 취소 포함
       if (_showCancelled) {
         whereConditions.add({
           'field': 'ts_status',
           'operator': 'IN',
-          'value': ['결제완료', '취소', '예약취소'],  // 예약취소도 포함
+          'value': ['결제완료', '예약완료', '취소', '예약취소'],
         });
       } else {
         whereConditions.add({
           'field': 'ts_status',
-          'operator': '=',
-          'value': '결제완료',
+          'operator': 'IN',
+          'value': ['결제완료', '예약완료'],  // 프로그램 예약은 예약완료 상태
         });
       }
 
@@ -428,6 +428,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'memberName': item['member_name'] ?? '',
         'reservationId': item['LS_orders_id']?.toString() ?? '',
         'lessonOrderId': item['LS_order_id']?.toString() ?? '',
+        'lsId': item['LS_id']?.toString() ?? '',  // supabase_adapter가 LS_로 복원함
         'billId': item['bill_id']?.toString() ?? '',
         'billMinId': item['bill_min_id']?.toString() ?? '',
         'billGameId': item['bill_game_id']?.toString() ?? '',
@@ -570,6 +571,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'memberName': item['member_name'] ?? '',
         'reservationId': item['LS_orders_id']?.toString() ?? '',
         'lessonOrderId': item['LS_order_id']?.toString() ?? '',
+        'lsId': item['LS_id']?.toString() ?? '',  // supabase_adapter가 LS_로 복원함
         'billId': item['bill_id']?.toString() ?? '',
         'billMinId': item['bill_min_id']?.toString() ?? '',
         'billGameId': item['bill_game_id']?.toString() ?? '',
