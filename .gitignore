@@ -30,3 +30,11 @@ Thumbs.db
 .env.local.json
 # Firebase Service Account (비밀 키)
 firebase-service-account.json
+
+# 빌드 디렉토리
+**/build/
+**/ios/build/
+**/android/build/
+*.xcarchive/
+*.dSYM/
+*.app.dSYM/
