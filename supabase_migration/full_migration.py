@@ -953,6 +953,13 @@ def migrate_to_supabase(tables: List[str]):
         reset_all_sequences(cursor)
         conn.commit()
         
+        # 추가 스키마 업데이트 (MySQL에 없는 새 필드/테이블)
+        print(f"\n" + "=" * 60)
+        print("4단계: 추가 스키마 업데이트")
+        print("=" * 60)
+        apply_additional_schema(cursor)
+        conn.commit()
+        
         return True
         
     except Exception as e:
@@ -1008,6 +1015,7 @@ SERIAL_COLUMNS = {
     'v2_term_member': 'term_id',
     'v2_discount_coupon': 'coupon_id',
     'v2_discount_coupon_auto_triggers': 'trigger_id',
+    'v2_discount_coupon_misuse': 'misuse_id',
     'v2_ls_orders': 'ls_order_id',
     'v2_wol_settings': 'pc_id',
 }
@@ -1048,6 +1056,350 @@ def reset_all_sequences(cursor):
     
     print("-" * 60)
     print(f"시퀀스 재설정 완료: 성공 {success_count}개, 건너뜀 {fail_count}개")
+
+
+def apply_additional_schema(cursor):
+    """마이그레이션 후 추가 스키마 업데이트 (MySQL에 없는 새 필드/테이블)"""
+    print("\n추가 스키마 업데이트 시작...")
+    print("-" * 60)
+    
+    # 0. 타석 예약 중복/겹침 방지 트리거 생성
+    try:
+        # 시간 겹침 체크 함수 생성
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION check_ts_reservation_overlap()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              -- 같은 지점, 같은 타석, 같은 날짜에 시간이 겹치는 활성 예약이 있는지 체크
+              IF EXISTS (
+                SELECT 1 FROM v2_priced_ts
+                WHERE branch_id = NEW.branch_id
+                  AND ts_id = NEW.ts_id
+                  AND ts_date = NEW.ts_date
+                  AND ts_status NOT LIKE '%%취소%%'
+                  AND ts_status NOT LIKE '%%환불%%'
+                  AND NEW.ts_start < ts_end 
+                  AND NEW.ts_end > ts_start
+                  -- UPDATE 시에는 자기 자신 제외
+                  AND (TG_OP = 'INSERT' OR reservation_id != NEW.reservation_id)
+              ) THEN
+                RAISE EXCEPTION '해당 시간대에 이미 예약이 존재합니다.'
+                  USING ERRCODE = '23505';
+              END IF;
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """)
+        print("  ✓ check_ts_reservation_overlap 함수 생성")
+        
+        # 기존 트리거 삭제 후 재생성
+        cursor.execute("DROP TRIGGER IF EXISTS prevent_ts_overlap ON v2_priced_ts")
+        cursor.execute("""
+            CREATE TRIGGER prevent_ts_overlap
+            BEFORE INSERT OR UPDATE ON v2_priced_ts
+            FOR EACH ROW
+            EXECUTE FUNCTION check_ts_reservation_overlap()
+        """)
+        print("  ✓ prevent_ts_overlap 트리거 생성")
+        
+        # 정확히 같은 시작시간 방지 인덱스
+        cursor.execute("DROP INDEX IF EXISTS unique_active_ts_reservation")
+        cursor.execute("""
+            CREATE UNIQUE INDEX unique_active_ts_reservation 
+            ON v2_priced_ts (branch_id, ts_id, ts_date, ts_start) 
+            WHERE ts_status NOT LIKE '%%취소%%' AND ts_status NOT LIKE '%%환불%%'
+        """)
+        print("  ✓ unique_active_ts_reservation 인덱스 생성")
+        
+    except Exception as e:
+        print(f"  ⚠ 타석 예약 중복 방지 설정 중 오류 (무시): {str(e)[:80]}")
+    
+    # 0-2. 레슨 예약 중복/겹침 방지 트리거 생성
+    try:
+        # 시간 겹침 체크 함수 생성 (같은 프로가 같은 날짜에 시간 겹침 방지)
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION check_ls_reservation_overlap()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              -- 같은 지점, 같은 프로, 같은 날짜에 시간이 겹치는 활성 레슨이 있는지 체크
+              IF EXISTS (
+                SELECT 1 FROM v2_ls_orders
+                WHERE branch_id = NEW.branch_id
+                  AND pro_id = NEW.pro_id
+                  AND ls_date = NEW.ls_date
+                  AND ls_status NOT LIKE '%%취소%%'
+                  AND ls_status NOT LIKE '%%환불%%'
+                  AND NEW.ls_start_time < ls_end_time 
+                  AND NEW.ls_end_time > ls_start_time
+                  -- UPDATE 시에는 자기 자신 제외
+                  AND (TG_OP = 'INSERT' OR ls_id != NEW.ls_id)
+              ) THEN
+                RAISE EXCEPTION '해당 시간대에 이미 레슨 예약이 존재합니다.'
+                  USING ERRCODE = '23505';
+              END IF;
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """)
+        print("  ✓ check_ls_reservation_overlap 함수 생성")
+        
+        # 기존 트리거 삭제 후 재생성
+        cursor.execute("DROP TRIGGER IF EXISTS prevent_ls_overlap ON v2_ls_orders")
+        cursor.execute("""
+            CREATE TRIGGER prevent_ls_overlap
+            BEFORE INSERT OR UPDATE ON v2_ls_orders
+            FOR EACH ROW
+            EXECUTE FUNCTION check_ls_reservation_overlap()
+        """)
+        print("  ✓ prevent_ls_overlap 트리거 생성")
+        
+        # LS_id 유니크 인덱스 (활성 레슨만 - 취소/환불 제외)
+        cursor.execute("DROP INDEX IF EXISTS unique_active_ls_id")
+        cursor.execute("""
+            CREATE UNIQUE INDEX unique_active_ls_id 
+            ON v2_ls_orders (branch_id, ls_id) 
+            WHERE ls_status NOT LIKE '%%취소%%' AND ls_status NOT LIKE '%%환불%%'
+        """)
+        print("  ✓ unique_active_ls_id 인덱스 생성")
+        
+    except Exception as e:
+        print(f"  ⚠ 레슨 예약 중복 방지 설정 중 오류 (무시): {str(e)[:80]}")
+    
+    # 0-3. 특수 예약 트랜잭션 함수 생성 (타석+레슨 원자적 처리)
+    try:
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION insert_special_reservation(
+              p_ts_records JSONB DEFAULT '[]'::JSONB,
+              p_ls_orders JSONB DEFAULT '[]'::JSONB,
+              p_ls_countings JSONB DEFAULT '[]'::JSONB,
+              p_bill_times JSONB DEFAULT '[]'::JSONB
+            )
+            RETURNS JSONB AS $$
+            DECLARE
+              v_ts_record JSONB;
+              v_ls_order JSONB;
+              v_ls_counting JSONB;
+              v_bill_time JSONB;
+              v_inserted_ts_ids TEXT[] := '{}';
+              v_inserted_ls_ids TEXT[] := '{}';
+              v_inserted_bill_ids INT[] := '{}';
+              v_inserted_counting_ids INT[] := '{}';
+              v_new_id INT;
+            BEGIN
+              -- 1. 타석 예약 INSERT (v2_priced_ts)
+              FOR v_ts_record IN SELECT * FROM jsonb_array_elements(p_ts_records)
+              LOOP
+                INSERT INTO v2_priced_ts (
+                  branch_id, reservation_id, ts_id, ts_name, ts_date, ts_start, ts_end,
+                  ts_type, ts_status, ts_buffer, member_id, member_name, member_type,
+                  pro_id, pro_name, program_id, routine_id, unit_price, transaction_type,
+                  bill_min_id, updated_at
+                ) VALUES (
+                  v_ts_record->>'branch_id',
+                  v_ts_record->>'reservation_id',
+                  v_ts_record->>'ts_id',
+                  v_ts_record->>'ts_name',
+                  (v_ts_record->>'ts_date')::DATE,
+                  (v_ts_record->>'ts_start')::TIME,
+                  (v_ts_record->>'ts_end')::TIME,
+                  v_ts_record->>'ts_type',
+                  COALESCE(v_ts_record->>'ts_status', '예약완료'),
+                  (v_ts_record->>'ts_buffer')::INT,
+                  v_ts_record->>'member_id',
+                  v_ts_record->>'member_name',
+                  v_ts_record->>'member_type',
+                  (v_ts_record->>'pro_id')::INT,
+                  v_ts_record->>'pro_name',
+                  v_ts_record->>'program_id',
+                  (v_ts_record->>'routine_id')::INT,
+                  (v_ts_record->>'unit_price')::NUMERIC,
+                  v_ts_record->>'transaction_type',
+                  (v_ts_record->>'bill_min_id')::INT,
+                  NOW()
+                );
+                v_inserted_ts_ids := array_append(v_inserted_ts_ids, v_ts_record->>'reservation_id');
+              END LOOP;
+
+              -- 2. 레슨 예약 INSERT (v2_ls_orders)
+              FOR v_ls_order IN SELECT * FROM jsonb_array_elements(p_ls_orders)
+              LOOP
+                INSERT INTO v2_ls_orders (
+                  branch_id, ls_id, ls_transaction_type, ls_date, member_id,
+                  ls_status, member_name, member_type, ls_type, pro_id, pro_name,
+                  ls_order_source, ls_start_time, ls_end_time, ls_net_min,
+                  ts_id, program_id, routine_id, ls_request, ls_contract_id, updated_at
+                ) VALUES (
+                  v_ls_order->>'branch_id',
+                  v_ls_order->>'ls_id',
+                  COALESCE(v_ls_order->>'ls_transaction_type', '레슨예약'),
+                  (v_ls_order->>'ls_date')::DATE,
+                  v_ls_order->>'member_id',
+                  COALESCE(v_ls_order->>'ls_status', '결제완료'),
+                  v_ls_order->>'member_name',
+                  v_ls_order->>'member_type',
+                  v_ls_order->>'ls_type',
+                  (v_ls_order->>'pro_id')::INT,
+                  v_ls_order->>'pro_name',
+                  COALESCE(v_ls_order->>'ls_order_source', '앱'),
+                  (v_ls_order->>'ls_start_time')::TIME,
+                  (v_ls_order->>'ls_end_time')::TIME,
+                  (v_ls_order->>'ls_net_min')::INT,
+                  (v_ls_order->>'ts_id')::INT,
+                  v_ls_order->>'program_id',
+                  (v_ls_order->>'routine_id')::INT,
+                  v_ls_order->>'ls_request',
+                  (v_ls_order->>'ls_contract_id')::INT,
+                  NOW()
+                );
+                v_inserted_ls_ids := array_append(v_inserted_ls_ids, v_ls_order->>'ls_id');
+              END LOOP;
+
+              -- 3. 타석 차감 기록 INSERT (v2_bill_times)
+              FOR v_bill_time IN SELECT * FROM jsonb_array_elements(p_bill_times)
+              LOOP
+                INSERT INTO v2_bill_times (
+                  branch_id, contract_history_id, bill_date, member_id, member_name,
+                  bill_type, ts_id, bill_min, bill_note, updated_at
+                ) VALUES (
+                  v_bill_time->>'branch_id',
+                  (v_bill_time->>'contract_history_id')::INT,
+                  (v_bill_time->>'bill_date')::DATE,
+                  v_bill_time->>'member_id',
+                  v_bill_time->>'member_name',
+                  v_bill_time->>'bill_type',
+                  (v_bill_time->>'ts_id')::INT,
+                  (v_bill_time->>'bill_min')::INT,
+                  v_bill_time->>'bill_note',
+                  NOW()
+                )
+                RETURNING bill_min_id INTO v_new_id;
+                v_inserted_bill_ids := array_append(v_inserted_bill_ids, v_new_id);
+              END LOOP;
+
+              -- 4. 레슨 카운팅 INSERT (v3_ls_countings)
+              FOR v_ls_counting IN SELECT * FROM jsonb_array_elements(p_ls_countings)
+              LOOP
+                INSERT INTO v3_ls_countings (
+                  branch_id, ls_id, ls_date, member_id, member_name, member_type,
+                  pro_id, pro_name, ls_net_min, contract_history_id, updated_at
+                ) VALUES (
+                  v_ls_counting->>'branch_id',
+                  v_ls_counting->>'ls_id',
+                  (v_ls_counting->>'ls_date')::DATE,
+                  v_ls_counting->>'member_id',
+                  v_ls_counting->>'member_name',
+                  v_ls_counting->>'member_type',
+                  (v_ls_counting->>'pro_id')::INT,
+                  v_ls_counting->>'pro_name',
+                  (v_ls_counting->>'ls_net_min')::INT,
+                  (v_ls_counting->>'contract_history_id')::INT,
+                  NOW()
+                )
+                RETURNING ls_counting_id INTO v_new_id;
+                v_inserted_counting_ids := array_append(v_inserted_counting_ids, v_new_id);
+              END LOOP;
+
+              -- 성공 시 결과 반환
+              RETURN jsonb_build_object(
+                'success', true,
+                'inserted_ts_ids', to_jsonb(v_inserted_ts_ids),
+                'inserted_ls_ids', to_jsonb(v_inserted_ls_ids),
+                'inserted_bill_ids', to_jsonb(v_inserted_bill_ids),
+                'inserted_counting_ids', to_jsonb(v_inserted_counting_ids)
+              );
+
+            EXCEPTION WHEN OTHERS THEN
+              -- 에러 발생 시 자동 롤백되고 에러 정보 반환
+              RETURN jsonb_build_object(
+                'success', false,
+                'error', SQLERRM,
+                'error_code', SQLSTATE,
+                'is_duplicate', (SQLSTATE = '23505')
+              );
+            END;
+            $$ LANGUAGE plpgsql
+        """)
+        print("  ✓ insert_special_reservation 트랜잭션 함수 생성")
+        
+    except Exception as e:
+        print(f"  ⚠ 특수 예약 트랜잭션 함수 생성 중 오류 (무시): {str(e)[:80]}")
+    
+    # 1. v2_discount_coupon 테이블에 새 필드 추가
+    try:
+        cursor.execute("""
+            ALTER TABLE v2_discount_coupon 
+            ADD COLUMN IF NOT EXISTS applied_discount_amt INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS applied_discount_min INTEGER DEFAULT 0
+        """)
+        print("  ✓ v2_discount_coupon: applied_discount_amt, applied_discount_min 필드 추가")
+    except Exception as e:
+        print(f"  ⚠ v2_discount_coupon 필드 추가 건너뜀: {str(e)[:50]}")
+    
+    # 2. v2_discount_coupon_misuse 테이블 생성
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS v2_discount_coupon_misuse (
+                misuse_id SERIAL PRIMARY KEY,
+                branch_id TEXT NOT NULL,
+                member_id INTEGER NOT NULL,
+                member_name TEXT,
+                coupon_id INTEGER NOT NULL,
+                coupon_code TEXT,
+                coupon_type TEXT,
+                discount_ratio INTEGER DEFAULT 0,
+                discount_amt INTEGER DEFAULT 0,
+                discount_min INTEGER DEFAULT 0,
+                reservation_id_issued TEXT,
+                reservation_id_used TEXT,
+                coupon_status_before TEXT,
+                used_coupon_discount INTEGER DEFAULT 0,
+                used_discount_min INTEGER DEFAULT 0,
+                recovered_amt INTEGER DEFAULT 0,
+                recovered_min INTEGER DEFAULT 0,
+                unrecovered_amt INTEGER DEFAULT 0,
+                unrecovered_min INTEGER DEFAULT 0,
+                recovery_status TEXT,
+                description TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        print("  ✓ v2_discount_coupon_misuse 테이블 생성")
+        
+        # 인덱스 생성
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_coupon_misuse_branch ON v2_discount_coupon_misuse(branch_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_coupon_misuse_member ON v2_discount_coupon_misuse(member_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_coupon_misuse_coupon ON v2_discount_coupon_misuse(coupon_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_coupon_misuse_status ON v2_discount_coupon_misuse(recovery_status)")
+        print("  ✓ v2_discount_coupon_misuse 인덱스 생성")
+        
+        # RLS 활성화
+        cursor.execute("ALTER TABLE v2_discount_coupon_misuse ENABLE ROW LEVEL SECURITY")
+        
+        # RLS 정책 생성
+        for role in ['authenticated', 'anon']:
+            try:
+                cursor.execute(f"""
+                    CREATE POLICY "{role}_insert_v2_discount_coupon_misuse"
+                    ON v2_discount_coupon_misuse FOR INSERT TO {role} WITH CHECK (true)
+                """)
+            except:
+                pass
+            try:
+                cursor.execute(f"""
+                    CREATE POLICY "{role}_select_v2_discount_coupon_misuse"
+                    ON v2_discount_coupon_misuse FOR SELECT TO {role} USING (true)
+                """)
+            except:
+                pass
+        
+        print("  ✓ v2_discount_coupon_misuse RLS 정책 생성")
+        
+    except Exception as e:
+        print(f"  ⚠ v2_discount_coupon_misuse 생성 건너뜀: {str(e)[:50]}")
+    
+    print("-" * 60)
+    print("추가 스키마 업데이트 완료")
 
 
 def reset_single_sequence(cursor, table_name: str, column_name: str):

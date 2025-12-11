@@ -27,3 +27,5 @@ CREATE TABLE IF NOT EXISTS sms_verification (
 -- 7일 이상 지난 레코드 삭제
 -- DELETE FROM sms_verification WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY);
 
+
+

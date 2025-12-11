@@ -8,18 +8,76 @@ import json
 
 PROJECT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'myxplanner')
 
-def find_android_device():
-    """실행 중인 Android 디바이스 찾기"""
+def find_android_devices():
+    """실행 중인 Android 디바이스/에뮬레이터 목록 찾기"""
     result = subprocess.run(['flutter', 'devices'], capture_output=True, text=True, cwd=PROJECT_DIR)
+    devices = []
     for line in result.stdout.split('\n'):
-        if 'android' in line.lower() and ('•' in line or 'emulator' in line.lower() or 'sdk' in line.lower()):
-            # flutter devices 출력 형식: "device_name • device_id • android • ..."
+        if 'android' in line.lower() and '•' in line:
             parts = line.split('•')
             if len(parts) >= 2:
                 device_id = parts[1].strip()
+                device_name = parts[0].strip() if len(parts) > 0 else ''
                 if device_id:
-                    return device_id
+                    is_emulator = 'emulator' in line.lower() or 'sdk' in line.lower()
+                    devices.append((device_id, device_name, is_emulator))
+    return devices
+
+def find_android_device():
+    """실행 중인 Android 디바이스 찾기 (하위 호환성)"""
+    devices = find_android_devices()
+    
+    # 실제 디바이스를 우선적으로 반환
+    for device_id, device_name, is_emulator in devices:
+        if not is_emulator:
+            return device_id
+    
+    # 실제 디바이스가 없으면 에뮬레이터 반환
+    for device_id, device_name, is_emulator in devices:
+        return device_id
+    
     return None
+
+def select_android_device():
+    """Android 디바이스 선택 (실제 디바이스와 에뮬레이터 중 선택)"""
+    devices = find_android_devices()
+    
+    if not devices:
+        return None
+    
+    if len(devices) == 1:
+        device_id, device_name, is_emulator = devices[0]
+        device_type = "에뮬레이터" if is_emulator else "실제 디바이스 ✅"
+        print(f"\n🤖 Android 디바이스 발견: {device_name} ({device_type})")
+        return device_id
+    
+    # 여러 디바이스가 있으면 선택
+    print("\n" + "="*50)
+    print("🤖 Android 디바이스 선택")
+    print("="*50)
+    
+    physical_devices = [(d, n, e) for d, n, e in devices if not e]
+    emulators = [(d, n, e) for d, n, e in devices if e]
+    
+    all_devices = physical_devices + emulators  # 실제 디바이스 먼저
+    
+    for i, (device_id, device_name, is_emulator) in enumerate(all_devices, 1):
+        device_type = "에뮬레이터" if is_emulator else "실제 디바이스 ✅ (무선)" if ':' in device_id else "실제 디바이스 ✅ (USB)"
+        print(f"{i}. {device_name} - {device_type}")
+    
+    print("="*50)
+    
+    while True:
+        try:
+            choice = input(f"\n선택하세요 (1-{len(all_devices)}): ").strip()
+            idx = int(choice) - 1
+            if 0 <= idx < len(all_devices):
+                selected = all_devices[idx]
+                print(f"\n✅ 선택됨: {selected[1]}")
+                return selected[0]
+        except ValueError:
+            pass
+        print(f"❌ 1-{len(all_devices)} 사이의 숫자를 입력하세요.")
 
 def find_ios_devices(debug=False):
     """실행 중인 iOS 디바이스/시뮬레이터 목록 찾기"""
@@ -384,17 +442,24 @@ platform_choice = select_platform()
 
 if platform_choice == '1':
     # Android만 실행
-    device_id = find_android_device()
+    devices = find_android_devices()
     
-    if not device_id:
+    if not devices:
+        print("\n⚠️  연결된 Android 디바이스가 없습니다.")
+        print("   에뮬레이터를 시작합니다...")
         if not start_android_emulator():
             sys.exit(1)
-        # 에뮬레이터 시작 후 디바이스 찾기 (최대 10초 추가 대기)
-        for _ in range(10):
-            device_id = find_android_device()
-            if device_id:
-                break
-            time.sleep(1)
+        device_id = find_android_device()
+    elif len(devices) == 1:
+        device_id, device_name, is_emulator = devices[0]
+        device_type = "에뮬레이터" if is_emulator else "실제 디바이스"
+        print(f"\n🤖 {device_name} ({device_type})")
+        if not is_emulator:
+            connection_type = "무선" if ':' in device_id else "USB"
+            print(f"✅ 실제 디바이스 - {connection_type} 연결")
+    else:
+        # 여러 디바이스가 있으면 선택
+        device_id = select_android_device()
     
     if not device_id:
         print("❌ Android 디바이스를 찾을 수 없습니다.")
