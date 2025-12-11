@@ -14,6 +14,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'login_model.dart';
 import 'change_password_widget.dart';
+import 'login_role_select.dart';
 export 'login_model.dart';
 
 // 웹 전용 import (conditional)
@@ -136,13 +137,33 @@ class _LoginWidgetState extends State<LoginWidget> {
     super.dispose();
   }
 
-  // 로그인 처리 함수
+  // 전화번호 형식 정규화 (010-1234-5678 → 01012345678)
+  String _normalizePhoneNumber(String input) {
+    return input.replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  // 로그인 처리 함수 (전화번호 기반)
   Future<void> _handleLogin() async {
     if (_model.staffAccessIdTextController.text.isEmpty ||
         _model.staffPasswordTextController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('아이디와 비밀번호를 입력해주세요.'),
+          content: Text('전화번호와 비밀번호를 입력해주세요.'),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+        ),
+      );
+      return;
+    }
+
+    final phoneInput = _model.staffAccessIdTextController.text.trim();
+    final password = _model.staffPasswordTextController.text.trim();
+    final phoneNumber = _normalizePhoneNumber(phoneInput);
+
+    // 전화번호 형식 검증
+    if (phoneNumber.length < 10 || phoneNumber.length > 11 || !phoneNumber.startsWith('01')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('올바른 전화번호 형식을 입력해주세요. (예: 010-1234-5678)'),
           backgroundColor: FlutterFlowTheme.of(context).error,
         ),
       );
@@ -155,105 +176,132 @@ class _LoginWidgetState extends State<LoginWidget> {
     });
 
     try {
-      // Staff 로그인 인증
-      final user = await ApiService.authenticateStaff(
-        staffAccessId: _model.staffAccessIdTextController.text.trim(),
-        staffPassword: _model.staffPasswordTextController.text.trim(),
+      print('📱 전화번호 기반 로그인 시작: $phoneNumber');
+
+      final result = await ApiService.authenticateStaffByPhone(
+        phoneNumber: phoneNumber,
+        staffPassword: password,
       );
 
-      if (user == null) {
+      if (result['success'] != true) {
         setState(() {
-          _model.errorMessage = '아이디 또는 비밀번호가 올바르지 않습니다.';
+          _model.errorMessage = result['message'] ?? '전화번호 또는 비밀번호가 올바르지 않습니다.';
           _model.isLoading = false;
         });
         return;
       }
 
-      _model.loggedInUser = user;
+      final staffOptions = List<Map<String, dynamic>>.from(result['staffOptions'] ?? []);
+      
+      if (staffOptions.isEmpty) {
+        setState(() {
+          _model.errorMessage = '등록된 계정을 찾을 수 없습니다.';
+          _model.isLoading = false;
+        });
+        return;
+      }
 
-      // 직원 정보를 전역으로 설정 (staff_access_id, role 포함)
+      setState(() {
+        _model.isLoading = false;
+      });
+
+      // 옵션이 1개면 바로 로그인, 여러 개면 선택 페이지로 이동
+      if (staffOptions.length == 1) {
+        print('✅ 단일 계정 - 바로 로그인');
+        await _loginWithStaffOption(staffOptions.first);
+      } else {
+        print('🔀 다중 계정 (${staffOptions.length}개) - 선택 페이지로 이동');
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => LoginRoleSelectPage(
+                staffOptions: staffOptions,
+                phoneNumber: phoneNumber,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _model.errorMessage = e.toString().replaceAll('Exception: ', '');
+        _model.isLoading = false;
+      });
+    }
+  }
+
+  // 선택된 옵션으로 로그인 처리
+  Future<void> _loginWithStaffOption(Map<String, dynamic> option) async {
+    setState(() {
+      _model.isLoading = true;
+    });
+
+    try {
+      final staffData = option['staffData'] as Map<String, dynamic>?;
+      final branchInfo = option['branch_info'] as Map<String, dynamic>?;
+      final branchId = option['branch_id']?.toString() ?? '';
+      final role = option['role']?.toString() ?? '';
+
+      if (staffData == null) {
+        throw Exception('직원 정보를 불러올 수 없습니다.');
+      }
+
+      // Firebase Anonymous 인증
+      try {
+        await FirebaseAuth.instance.signInAnonymously();
+        print('✅ Firebase Anonymous 인증 성공');
+      } catch (e) {
+        print('⚠️ Firebase Anonymous 인증 실패: $e');
+      }
+
+      // 직원 정보 전역 설정
       ApiService.setCurrentStaff(
-        user['staff_access_id'],
-        user['role'], // 'pro' 또는 'manager'
-        user,
+        staffData['staff_access_id'] as String? ?? '',
+        role,
+        staffData,
       );
-
-      // 직원의 branch_id로 해당 지점 정보 조회
-      final branchId = user['branch_id'];
-      if (branchId == null || branchId.toString().isEmpty) {
-        setState(() {
-          _model.errorMessage = '직원의 지점 정보가 없습니다.';
-          _model.isLoading = false;
-        });
-        return;
-      }
-
-      // 해당 지점 정보 조회
-      final branches = await ApiService.getBranchData(
-        where: [
-          {
-            'field': 'branch_id',
-            'operator': '=',
-            'value': branchId,
-          }
-        ]
-      );
-
-      if (branches.isEmpty) {
-        setState(() {
-          _model.errorMessage = '지점 정보를 찾을 수 없습니다.';
-          _model.isLoading = false;
-        });
-        return;
-      }
 
       // 지점 정보 설정
-      _model.selectedBranch = branches[0];
-      ApiService.setCurrentBranch(
-        _model.selectedBranch!['branch_id'],
-        _model.selectedBranch!,
-      );
+      final branchData = branchInfo ?? {'branch_id': branchId};
+      ApiService.setCurrentBranch(branchId, branchData);
+      _model.selectedBranch = branchData;
 
-      // 초기 비밀번호 체크 (핸드폰 번호 뒷 4자리)
-      final storedPassword = user['staff_access_password']?.toString() ?? '';
+      // 채팅 알림 서비스 활성화
+      ChatNotificationService().setupSubscriptions();
 
-      // 역할에 따라 전화번호 필드 선택
+      // 권한 설정 조회
+      await _queryAndSetAccessSettingsForLogin(staffData['staff_access_id'], branchId);
+
+      // 세션 시작
+      SessionManager.instance.startSession();
+
+      // 초기 비밀번호 체크
+      final storedPassword = staffData['staff_access_password']?.toString() ?? '';
       String phoneNumber = '';
-      if (user['role'] == 'manager') {
-        phoneNumber = user['manager_phone']?.toString() ?? '';
-      } else if (user['role'] == 'pro') {
-        phoneNumber = user['pro_phone']?.toString() ?? '';
+      if (role == 'manager') {
+        phoneNumber = staffData['manager_phone']?.toString() ?? '';
+      } else if (role == 'pro') {
+        phoneNumber = staffData['pro_phone']?.toString() ?? '';
       }
-
-      // 폴백: staff_phone도 체크
-      if (phoneNumber.isEmpty) {
-        phoneNumber = user['staff_phone']?.toString() ?? '';
-      }
-
-      print('🔍 초기 비밀번호 체크:');
-      print('  - 역할: ${user['role']}');
-      print('  - 저장된 비밀번호: $storedPassword');
-      print('  - 전화번호: $phoneNumber');
-      print('  - user 객체 전체: $user');
 
       final isInitial = PasswordService.isInitialPassword(storedPassword, phoneNumber);
-      print('  - 초기 비밀번호 여부: $isInitial');
-
+      
       if (isInitial && phoneNumber.isNotEmpty) {
         print('⚠️ 초기 비밀번호 감지 - 비밀번호 변경 필요');
         setState(() {
           _model.isLoading = false;
         });
-
-        // 비밀번호 변경 페이지로 이동
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => ChangePasswordWidget(
-              staffAccessId: user['staff_access_id'],
-              isInitialPasswordChange: true,
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => ChangePasswordWidget(
+                staffAccessId: staffData['staff_access_id'],
+                isInitialPasswordChange: true,
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
 
@@ -267,6 +315,26 @@ class _LoginWidgetState extends State<LoginWidget> {
         _model.errorMessage = e.toString().replaceAll('Exception: ', '');
         _model.isLoading = false;
       });
+    }
+  }
+
+  // 권한 설정 조회
+  Future<void> _queryAndSetAccessSettingsForLogin(String? staffAccessId, String branchId) async {
+    if (staffAccessId == null) return;
+    try {
+      final accessSettings = await ApiService.getDataList(
+        table: 'v2_staff_access_setting',
+        where: [
+          {'field': 'staff_access_id', 'operator': '=', 'value': staffAccessId},
+          {'field': 'branch_id', 'operator': '=', 'value': branchId},
+        ],
+      );
+      if (accessSettings.isNotEmpty) {
+        ApiService.setCurrentAccessSettings(accessSettings[0]);
+        print('✅ 권한 설정 로드 완료');
+      }
+    } catch (e) {
+      print('⚠️ 권한 설정 조회 실패: $e');
     }
   }
 
@@ -1309,7 +1377,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                               ),
                             ),
                           
-                          // 직원 아이디 입력 필드 - 더 세련되게
+                          // 전화번호 입력 필드
                           Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(0.0, 32.0, 0.0, 20.0),
                             child: Column(
@@ -1318,7 +1386,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 Padding(
                                   padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 8.0),
                                   child: Text(
-                                    '직원 아이디',
+                                    '전화번호',
                                     style: TextStyle(
                                       fontFamily: 'Inter',
                                       color: Color(0xFF374151),
@@ -1334,11 +1402,11 @@ class _LoginWidgetState extends State<LoginWidget> {
                                   autofocus: false,
                                   obscureText: false,
                                   onFieldSubmitted: (_) {
-                                    // 아이디 입력 후 엔터 시 비밀번호 필드로 포커스 이동
+                                    // 전화번호 입력 후 엔터 시 비밀번호 필드로 포커스 이동
                                     FocusScope.of(context).requestFocus(_model.staffPasswordFocusNode);
                                   },
                                   decoration: InputDecoration(
-                                    hintText: '아이디를 입력하세요',
+                                    hintText: '010-1234-5678',
                                     hintStyle: TextStyle(
                                       fontFamily: 'Inter',
                                       color: Color(0xFF9CA3AF),
@@ -1378,7 +1446,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                                     fillColor: Color(0xFFFAFAFA),
                                     contentPadding: EdgeInsetsDirectional.fromSTEB(16.0, 16.0, 16.0, 16.0),
                                     prefixIcon: Icon(
-                                      Icons.person_outline_rounded,
+                                      Icons.phone_outlined,
                                       color: Color(0xFF6B7280),
                                       size: 20.0,
                                     ),
@@ -1390,7 +1458,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                                     letterSpacing: 0.0,
                                     fontWeight: FontWeight.w400,
                                   ),
-                                  keyboardType: TextInputType.text,
+                                  keyboardType: TextInputType.phone,
                                   validator: _model.staffAccessIdTextControllerValidator.asValidator(context),
                                 ),
                               ],

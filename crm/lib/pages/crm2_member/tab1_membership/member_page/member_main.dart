@@ -796,10 +796,17 @@ class _MemberMainWidgetState extends State<MemberMainWidget>
 
     // SMS 발송
     try {
+      // 지점 정보 가져오기
+      final branchInfo = ApiService.getCurrentBranch();
+      final branchName = branchInfo?['branch_name']?.toString() ?? '골프연습장';
+      final branchPhone = branchInfo?['branch_phone']?.toString() ?? '';
+      
       final result = await SmsService.sendAppInstallSms(
         phoneNumber: memberPhone,
         memberName: memberName,
-        appName: 'crm_lite_pro',
+        branchName: branchName,
+        branchPhone: branchPhone,
+        appName: 'mygolfplanner',
       );
 
       if (mounted) {

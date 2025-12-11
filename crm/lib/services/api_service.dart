@@ -2492,6 +2492,227 @@ class ApiService {
     }
   }
 
+  // 전화번호 기반 Staff 로그인 인증 (다중 지점/역할 지원) - Supabase 전용
+  // 전화번호당 비밀번호는 1개만 존재 (첫 번째 계정으로 1회만 검증)
+  // 반환값: {
+  //   'success': true,
+  //   'staffOptions': [{ branch_id, branch_name, role, role_display, staff_name, staffData }],
+  //   'singleOption': true/false (옵션이 1개면 true)
+  // }
+  static Future<Map<String, dynamic>> authenticateStaffByPhone({
+    required String phoneNumber,
+    required String staffPassword,
+  }) async {
+    print('=== authenticateStaffByPhone 메서드 시작 (Supabase) ===');
+    print('입력 받은 값:');
+    print('  - phoneNumber: $phoneNumber');
+    print('  - staffPassword: (보안상 표시 안함)');
+
+    try {
+      final List<Map<String, dynamic>> allStaffList = [];
+
+      // 1. v2_staff_pro 테이블에서 전화번호로 사용자 조회
+      print('1단계: v2_staff_pro 테이블 조회 시작 (전화번호: $phoneNumber)');
+      final proData = await SupabaseAdapter.getData(
+        table: 'v2_staff_pro',
+        where: [
+          {
+            'field': 'pro_phone',
+            'operator': '=',
+            'value': phoneNumber,
+          },
+          {
+            'field': 'staff_status',
+            'operator': '=',
+            'value': '재직',
+          },
+        ],
+        includeSensitiveFields: true, // 로그인 시 비밀번호 필드 포함
+      );
+
+      print('Pro 응답: ${proData.length}개');
+
+      // Pro 계정들 추가 (role, staff_name 설정)
+      for (var userData in proData) {
+        userData['role'] = 'pro';
+        userData['staff_name'] = userData['pro_name'];
+        allStaffList.add(userData);
+      }
+
+      // 2. v2_staff_manager 테이블에서 전화번호로 사용자 조회
+      print('2단계: v2_staff_manager 테이블 조회 시작 (전화번호: $phoneNumber)');
+      final managerData = await SupabaseAdapter.getData(
+        table: 'v2_staff_manager',
+        where: [
+          {
+            'field': 'manager_phone',
+            'operator': '=',
+            'value': phoneNumber,
+          },
+          {
+            'field': 'staff_status',
+            'operator': '=',
+            'value': '재직',
+          },
+        ],
+        includeSensitiveFields: true, // 로그인 시 비밀번호 필드 포함
+      );
+
+      print('Manager 응답: ${managerData.length}개');
+
+      // Manager 계정들 추가 (role, staff_name 설정)
+      for (var userData in managerData) {
+        userData['role'] = 'manager';
+        userData['staff_name'] = userData['manager_name'];
+        allStaffList.add(userData);
+      }
+
+      // 3. 계정이 없으면 실패
+      if (allStaffList.isEmpty) {
+        print('❌ 인증 실패: 해당 전화번호로 등록된 계정이 없습니다.');
+        return {
+          'success': false,
+          'message': '전화번호 또는 비밀번호가 올바르지 않습니다.',
+        };
+      }
+
+      // 4. 첫 번째 계정의 비밀번호로 1회만 검증 (전화번호당 비밀번호는 1개)
+      final firstAccount = allStaffList.first;
+      final storedPassword = firstAccount['staff_access_password'] ?? '';
+      
+      print('🔐 비밀번호 검증 (전화번호당 1회)...');
+      if (!PasswordService.verifyPassword(staffPassword, storedPassword)) {
+        print('❌ 비밀번호 불일치');
+        return {
+          'success': false,
+          'message': '전화번호 또는 비밀번호가 올바르지 않습니다.',
+        };
+      }
+      
+      print('✅ 비밀번호 검증 성공!');
+
+      // 5. 비밀번호 자동 마이그레이션 (bcrypt가 아닌 경우)
+      final hashType = PasswordService.getHashType(storedPassword);
+      if (hashType != 'bcrypt') {
+        print('🔄 비밀번호 자동 마이그레이션 (${hashType} → bcrypt)');
+        try {
+          final bcryptHash = PasswordService.hashPassword(staffPassword);
+          
+          // 해당 전화번호의 모든 계정 비밀번호 업데이트
+          for (var staff in allStaffList) {
+            final role = staff['role'];
+            if (role == 'pro') {
+              final proId = staff['pro_id']?.toString();
+              if (proId != null) {
+                await updateData(
+                  table: 'v2_staff_pro',
+                  data: {'staff_access_password': bcryptHash},
+                  where: [{'field': 'pro_id', 'operator': '=', 'value': proId}],
+                );
+              }
+            } else if (role == 'manager') {
+              final managerId = staff['manager_id']?.toString();
+              if (managerId != null) {
+                await updateData(
+                  table: 'v2_staff_manager',
+                  data: {'staff_access_password': bcryptHash},
+                  where: [{'field': 'manager_id', 'operator': '=', 'value': managerId}],
+                );
+              }
+            }
+            staff['staff_access_password'] = bcryptHash;
+          }
+          print('✅ 비밀번호 bcrypt 마이그레이션 완료 (${allStaffList.length}개 계정)');
+        } catch (e) {
+          print('⚠️ 비밀번호 마이그레이션 실패 (계속 진행): $e');
+        }
+      }
+
+      // 6. 지점 + 역할 기준 중복 제거
+      // 같은 지점, 같은 역할의 여러 계약은 하나로 표시
+      final Map<String, Map<String, dynamic>> uniqueOptions = {};
+      
+      for (var staff in allStaffList) {
+        final branchId = staff['branch_id']?.toString() ?? '';
+        final role = staff['role']?.toString() ?? '';
+        final key = '${branchId}_$role';
+        
+        // 이미 있으면 스킵 (첫 번째 계약만 사용)
+        if (!uniqueOptions.containsKey(key)) {
+          uniqueOptions[key] = staff;
+        }
+      }
+
+      print('📊 중복 제거 후 옵션 수: ${uniqueOptions.length}개');
+
+      // 7. 지점 정보 조회하여 지점명 추가
+      final List<Map<String, dynamic>> staffOptions = [];
+      final branchIds = uniqueOptions.values
+          .map((s) => s['branch_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      Map<String, Map<String, dynamic>> branchInfoMap = {};
+      if (branchIds.isNotEmpty) {
+        for (var branchId in branchIds) {
+          try {
+            final branches = await getBranchData(
+              where: [{'field': 'branch_id', 'operator': '=', 'value': branchId}],
+            );
+            if (branches.isNotEmpty) {
+              branchInfoMap[branchId!] = branches.first;
+            }
+          } catch (e) {
+            print('⚠️ 지점 정보 조회 실패 (branch_id: $branchId): $e');
+          }
+        }
+      }
+
+      // 8. 최종 옵션 리스트 구성
+      for (var entry in uniqueOptions.entries) {
+        final staff = entry.value;
+        final branchId = staff['branch_id']?.toString() ?? '';
+        final branchInfo = branchInfoMap[branchId];
+        final branchName = branchInfo?['branch_name']?.toString() ?? '알 수 없는 지점';
+        final role = staff['role']?.toString() ?? '';
+        
+        staffOptions.add({
+          'branch_id': branchId,
+          'branch_name': branchName,
+          'branch_info': branchInfo,
+          'role': role,
+          'role_display': role == 'pro' ? '프로' : (role == 'manager' ? '매니저' : role),
+          'staff_name': staff['staff_name'] ?? '',
+          'staff_access_id': staff['staff_access_id'] ?? '',
+          'staffData': staff,
+        });
+      }
+
+      // 정렬: 지점명 → 역할순
+      staffOptions.sort((a, b) {
+        final branchCompare = (a['branch_name'] as String).compareTo(b['branch_name'] as String);
+        if (branchCompare != 0) return branchCompare;
+        return (a['role'] as String).compareTo(b['role'] as String);
+      });
+
+      print('✅ 인증 성공! 선택 가능한 옵션: ${staffOptions.length}개');
+      for (var opt in staffOptions) {
+        print('  - ${opt['branch_name']} / ${opt['role_display']} (${opt['staff_name']})');
+      }
+
+      return {
+        'success': true,
+        'staffOptions': staffOptions,
+        'singleOption': staffOptions.length == 1,
+      };
+
+    } catch (e) {
+      print('❌❌❌ 예외 발생: $e');
+      throw Exception('로그인 오류: $e');
+    }
+  }
+
   // 지점 정보 조회 (Supabase 전용)
   static Future<List<Map<String, dynamic>>> getBranchData({
     List<String>? fields,

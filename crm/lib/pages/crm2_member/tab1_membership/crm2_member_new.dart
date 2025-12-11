@@ -319,10 +319,17 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
   // 앱 설치 안내 SMS 발송
   Future<void> _sendAppInstallSms(String phoneNumber, String memberName) async {
     try {
+      // 지점 정보 가져오기
+      final branchInfo = ApiService.getCurrentBranch();
+      final branchName = branchInfo?['branch_name']?.toString() ?? '골프연습장';
+      final branchPhone = branchInfo?['branch_phone']?.toString() ?? '';
+      
       final result = await SmsService.sendAppInstallSms(
         phoneNumber: phoneNumber,
         memberName: memberName,
-        appName: 'crm_lite_pro', // CRM에서는 crm_lite_pro 앱 안내
+        branchName: branchName,
+        branchPhone: branchPhone,
+        appName: 'mygolfplanner',
       );
 
       if (mounted) {

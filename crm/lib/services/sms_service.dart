@@ -59,11 +59,14 @@ class SmsService {
   static Future<Map<String, dynamic>> sendAppInstallSms({
     required String phoneNumber,
     required String memberName,
-    String appName = 'crm_lite_pro',
+    required String branchName,
+    required String branchPhone,
+    String appName = 'mygolfplanner',
   }) async {
     try {
       print('📱 앱 설치 안내 SMS 발송 시작');
       print('   - 수신자: $memberName ($phoneNumber)');
+      print('   - 지점: $branchName ($branchPhone)');
       print('   - 앱: $appName');
       
       // 전화번호 포맷 정리
@@ -82,6 +85,8 @@ class SmsService {
       // 메시지 생성
       String message = _buildInstallMessage(
         memberName: memberName,
+        branchName: branchName,
+        branchPhone: branchPhone,
         androidUrl: appUrls['android'],
         iosUrl: appUrls['ios'],
       );
@@ -132,12 +137,14 @@ class SmsService {
   /// 앱 설치 안내 메시지 생성
   static String _buildInstallMessage({
     required String memberName,
+    required String branchName,
+    required String branchPhone,
     String? androidUrl,
     String? iosUrl,
   }) {
     StringBuffer sb = StringBuffer();
     
-    sb.writeln('[AutoGolf CRM] 앱 설치 안내');
+    sb.writeln('[$branchName] 앱 설치 안내');
     sb.writeln('');
     sb.writeln('$memberName 회원님, 환영합니다!');
     sb.writeln('');
@@ -159,7 +166,7 @@ class SmsService {
       sb.writeln('');
     }
     
-    sb.writeln('문의: enables.tech@gmail.com');
+    sb.writeln('문의: ${formatPhoneNumber(branchPhone)}');
     
     return sb.toString().trim();
   }
