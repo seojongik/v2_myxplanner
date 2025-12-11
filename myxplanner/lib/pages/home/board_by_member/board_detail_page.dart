@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../models/board_model.dart';
 import '../../../services/board_service.dart';
+import '../../../services/content_filter_service.dart';
+import '../../../services/chat_report_service.dart';
 import 'board_create_page.dart';
 
 class BoardDetailPage extends StatefulWidget {
@@ -24,11 +26,20 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
   bool _isLoading = false;
   final TextEditingController _replyController = TextEditingController();
   final FocusNode _replyFocusNode = FocusNode();
+  List<String> _blockedUserIds = [];
   
   @override
   void initState() {
     super.initState();
     _loadReplies();
+    _loadBlockedUsers();
+  }
+
+  Future<void> _loadBlockedUsers() async {
+    final blocked = await ChatReportService.getBlockedUserIds();
+    setState(() {
+      _blockedUserIds = blocked;
+    });
   }
 
   @override
@@ -68,6 +79,19 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
     if (widget.branchId == null || widget.selectedMember == null) return;
 
     final content = _replyController.text.trim();
+
+    // 콘텐츠 필터링 검사
+    final (isAllowed, reason) = ContentFilterService.validateMessage(content);
+    if (!isAllowed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(reason ?? '부적절한 내용이 포함되어 있습니다'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final memberId = widget.selectedMember!['member_id']?.toString() ?? '';
 
     try {
@@ -165,6 +189,147 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
     });
   }
 
+  Future<void> _reportBoard() async {
+    final reasons = ChatReportService.getReportReasons();
+    String? selectedReason;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.flag, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('게시글 신고'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('신고 사유를 선택해주세요:'),
+              SizedBox(height: 12),
+              ...reasons.map((reason) => RadioListTile<String>(
+                title: Text(reason),
+                value: reason,
+                groupValue: selectedReason,
+                onChanged: (value) => setState(() => selectedReason = value),
+                dense: true,
+              )).toList(),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: selectedReason != null
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: Text('신고하기'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && selectedReason != null) {
+      final success = await ChatReportService.reportBoard(
+        boardId: widget.board.memberboardId.toString(),
+        reportedMemberId: widget.board.memberId,
+        reportedMemberName: widget.board.memberName ?? '익명',
+        boardTitle: widget.board.title,
+        boardContent: widget.board.content,
+        reportReason: selectedReason!,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success 
+            ? '신고가 접수되었습니다. 24시간 내에 검토됩니다.' 
+            : '신고 접수에 실패했습니다.'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _blockUser() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.block, color: Colors.red),
+            SizedBox(width: 8),
+            Text('작성자 차단'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${widget.board.memberName ?? '익명'}님을 차단하시겠습니까?'),
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '차단하면 이 사용자의 게시글과 댓글이 보이지 않습니다.',
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('차단하기'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final success = await ChatReportService.blockUser(
+        blockedUserId: widget.board.memberId,
+        blockedUserType: 'member',
+        reason: '게시글에서 차단',
+      );
+
+      if (success) {
+        setState(() {
+          _blockedUserIds.add(widget.board.memberId);
+        });
+        Navigator.pop(context, true); // 차단 후 목록으로 돌아가기
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.board.memberName ?? '사용자'}님이 차단되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('차단에 실패했습니다.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final boardTypeDisplay = BoardModel.getBoardTypeDisplayName(widget.board.boardType);
@@ -199,9 +364,9 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
         centerTitle: true,
         elevation: 0,
         actions: [
-          if (isAuthor) ...[
-            PopupMenuButton(
-              itemBuilder: (context) => [
+          PopupMenuButton(
+            itemBuilder: (context) => [
+              if (isAuthor) ...[
                 PopupMenuItem(
                   value: 'edit',
                   child: Row(
@@ -223,15 +388,41 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                   ),
                 ),
               ],
-              onSelected: (value) {
-                if (value == 'edit') {
-                  _editBoard();
-                } else if (value == 'delete') {
-                  _deleteBoard();
-                }
-              },
-            ),
-          ],
+              if (!isAuthor) ...[
+                PopupMenuItem(
+                  value: 'report',
+                  child: Row(
+                    children: [
+                      Icon(Icons.flag, size: 20, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Text('신고하기', style: TextStyle(color: Colors.orange)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'block',
+                  child: Row(
+                    children: [
+                      Icon(Icons.block, size: 20, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('작성자 차단', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+            onSelected: (value) {
+              if (value == 'edit') {
+                _editBoard();
+              } else if (value == 'delete') {
+                _deleteBoard();
+              } else if (value == 'report') {
+                _reportBoard();
+              } else if (value == 'block') {
+                _blockUser();
+              }
+            },
+          ),
         ],
       ),
       body: Column(
@@ -446,59 +637,226 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
   }
 
   Widget _buildReplyItem(BoardReplyModel reply) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+    // 차단된 사용자의 댓글은 표시하지 않음
+    if (_blockedUserIds.contains(reply.memberId)) {
+      return SizedBox.shrink();
+    }
+
+    final isMyReply = widget.selectedMember != null &&
+        widget.selectedMember!['member_id']?.toString() == reply.memberId;
+
+    return GestureDetector(
+      onLongPress: () => _showReplyOptions(reply, isMyReply),
+      child: Container(
+        margin: EdgeInsets.only(bottom: 16),
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.grey[300],
+                  child: Icon(
+                    Icons.person,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  reply.memberName ?? '익명',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                Spacer(),
+                Text(
+                  '${reply.createdAt.month}/${reply.createdAt.day} ${reply.createdAt.hour.toString().padLeft(2, '0')}:${reply.createdAt.minute.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _showReplyOptions(reply, isMyReply),
+                  child: Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Text(
+              reply.content,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: Colors.grey[300],
-                child: Icon(
-                  Icons.person,
-                  size: 16,
-                  color: Colors.grey[600],
-                ),
+    );
+  }
+
+  void _showReplyOptions(BoardReplyModel reply, bool isMyReply) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isMyReply) ...[
+              ListTile(
+                leading: Icon(Icons.flag, color: Colors.orange),
+                title: Text('댓글 신고하기'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _reportReply(reply);
+                },
               ),
-              SizedBox(width: 8),
-              Text(
-                reply.memberName ?? '익명',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[700],
-                ),
-              ),
-              Spacer(),
-              Text(
-                '${reply.createdAt.month}/${reply.createdAt.day} ${reply.createdAt.hour.toString().padLeft(2, '0')}:${reply.createdAt.minute.toString().padLeft(2, '0')}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[500],
-                ),
+              ListTile(
+                leading: Icon(Icons.block, color: Colors.red),
+                title: Text('작성자 차단하기'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _blockReplyUser(reply);
+                },
               ),
             ],
-          ),
-          SizedBox(height: 8),
-          Text(
-            reply.content,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.black87,
-              height: 1.4,
+            ListTile(
+              leading: Icon(Icons.close),
+              title: Text('취소'),
+              onTap: () => Navigator.pop(context),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportReply(BoardReplyModel reply) async {
+    final reasons = ChatReportService.getReportReasons();
+    String? selectedReason;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.flag, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('댓글 신고'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('신고 사유를 선택해주세요:'),
+              SizedBox(height: 12),
+              ...reasons.map((reason) => RadioListTile<String>(
+                title: Text(reason, style: TextStyle(fontSize: 14)),
+                value: reason,
+                groupValue: selectedReason,
+                onChanged: (value) => setState(() => selectedReason = value),
+                dense: true,
+              )).toList(),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: selectedReason != null
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: Text('신고하기'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && selectedReason != null) {
+      final success = await ChatReportService.reportReply(
+        replyId: reply.replyId.toString(),
+        boardId: widget.board.memberboardId.toString(),
+        reportedMemberId: reply.memberId,
+        reportedMemberName: reply.memberName ?? '익명',
+        replyContent: reply.content,
+        reportReason: selectedReason!,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success 
+            ? '신고가 접수되었습니다. 24시간 내에 검토됩니다.' 
+            : '신고 접수에 실패했습니다.'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _blockReplyUser(BoardReplyModel reply) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.block, color: Colors.red),
+            SizedBox(width: 8),
+            Text('사용자 차단'),
+          ],
+        ),
+        content: Text('${reply.memberName ?? '익명'}님을 차단하시겠습니까?\n\n차단하면 이 사용자의 모든 콘텐츠가 보이지 않습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('차단하기'),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      final success = await ChatReportService.blockUser(
+        blockedUserId: reply.memberId,
+        blockedUserType: 'member',
+        reason: '댓글에서 차단',
+      );
+
+      if (success) {
+        setState(() {
+          _blockedUserIds.add(reply.memberId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${reply.memberName ?? '사용자'}님이 차단되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildReplyInput() {

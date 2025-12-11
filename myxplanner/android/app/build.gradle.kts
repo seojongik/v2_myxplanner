@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,8 +10,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// key.properties 파일 로드
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 android {
-    namespace = "com.enabletech.autogolfcrm"
+    namespace = "app.mygolfplanner"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -24,7 +34,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.enabletech.autogolfcrm"
+        applicationId = "app.mygolfplanner"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion  // Firebase Auth 최소 요구사항
@@ -34,11 +44,20 @@ android {
         multiDexEnabled = true  // Firebase 때문에 필요
     }
 
+    // Release 서명 설정
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release 빌드용 서명 설정 사용
+            signingConfig = signingConfigs.getByName("release")
             
             // 릴리즈 빌드 최적화 설정
             // minifyEnabled를 false로 설정하면 코드 난독화/최적화가 비활성화됨

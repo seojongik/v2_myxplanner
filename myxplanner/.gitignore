@@ -49,3 +49,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 config.json
+PROJECT_DOCUMENTATION.md
+APPSTORE_TEXTS.md
+
+# 민감한 정보 (계정, 키 등)
+non-git/

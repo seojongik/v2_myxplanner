@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/tab_design_service.dart';
 import '../../../services/board_service.dart';
+import '../../../services/chat_report_service.dart';
 import '../../../models/board_model.dart';
 import 'board_detail_page.dart';
 import 'board_create_page.dart';
@@ -24,6 +25,7 @@ class _BoardListPageState extends State<BoardListPage> with TickerProviderStateM
   List<BoardModel> _boards = [];
   bool _isLoading = false;
   String _currentBoardType = '';
+  List<String> _blockedUserIds = [];
 
   final List<Map<String, dynamic>> _tabs = [
     {'title': '공지사항', 'icon': Icons.campaign, 'type': '공지사항'},
@@ -38,7 +40,15 @@ class _BoardListPageState extends State<BoardListPage> with TickerProviderStateM
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_onTabChanged);
     _currentBoardType = _tabs[0]['type']; // 첫 번째 탭으로 초기화
+    _loadBlockedUsers();
     _loadBoards();
+  }
+
+  Future<void> _loadBlockedUsers() async {
+    final blocked = await ChatReportService.getBlockedUserIds();
+    setState(() {
+      _blockedUserIds = blocked;
+    });
   }
 
   @override
@@ -211,6 +221,11 @@ class _BoardListPageState extends State<BoardListPage> with TickerProviderStateM
   }
 
   Widget _buildBoardItem(BoardModel board) {
+    // 차단된 사용자의 게시글은 표시하지 않음
+    if (_blockedUserIds.contains(board.memberId)) {
+      return SizedBox.shrink();
+    }
+
     final boardTypeDisplay = BoardModel.getBoardTypeDisplayName(board.boardType);
     
     Color getTagColor(String boardType) {

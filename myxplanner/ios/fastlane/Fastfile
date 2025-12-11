@@ -1,0 +1,61 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "TestFlight에 업로드"
+  lane :beta do
+    # 빌드 번호 자동 증가
+    increment_build_number(
+      xcodeproj: "Runner.xcodeproj"
+    )
+    
+    # 앱 빌드 (Archive)
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Runner.ipa"
+    )
+    
+    # TestFlight에 업로드
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "App Store에 제출"
+  lane :release do
+    # 빌드 번호 자동 증가
+    increment_build_number(
+      xcodeproj: "Runner.xcodeproj"
+    )
+    
+    # 앱 빌드 (Archive)
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Runner.ipa"
+    )
+    
+    # App Store에 업로드
+    upload_to_app_store(
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: false
+    )
+  end
+
+  desc "빌드만 (업로드 없이)"
+  lane :build_only do
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Runner.ipa"
+    )
+  end
+end
+

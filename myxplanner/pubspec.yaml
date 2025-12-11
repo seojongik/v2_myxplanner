@@ -3,7 +3,7 @@ description: 독립적으로 실행 가능한 예약 관리 시스템
 
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

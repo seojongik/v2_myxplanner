@@ -7,12 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:101436238734:android:79880c733be09b34ff92df",
+        "mobilesdk_app_id": "1:101436238734:android:7a40420f05ccc85dff92df",
         "android_client_info": {
-          "package_name": "com.enabletech.autogolfcrm"
+          "package_name": "app.mygolfplanner"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "101436238734-e5mjvb1eh3vuolig4ulrd0qdrqt1mq8g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB88lKjes3zXeszyUjll85-0YJorZ_Atzk"
@@ -20,7 +25,55 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "101436238734-e5mjvb1eh3vuolig4ulrd0qdrqt1mq8g.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "101436238734-9qm1l51gkokl3ii6ar86g0m8s76p2v2s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "mygolfplanner.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:101436238734:android:79880c733be09b34ff92df",
+        "android_client_info": {
+          "package_name": "com.enabletech.autogolfcrm"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "101436238734-e5mjvb1eh3vuolig4ulrd0qdrqt1mq8g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB88lKjes3zXeszyUjll85-0YJorZ_Atzk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "101436238734-e5mjvb1eh3vuolig4ulrd0qdrqt1mq8g.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "101436238734-9qm1l51gkokl3ii6ar86g0m8s76p2v2s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "mygolfplanner.app"
+              }
+            }
+          ]
         }
       }
     }

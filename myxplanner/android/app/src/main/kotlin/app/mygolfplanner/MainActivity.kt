@@ -1,4 +1,4 @@
-package com.enabletech.autogolfcrm
+package app.mygolfplanner
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -20,9 +20,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.enabletech.autogolfcrm/intent_launcher"
-    private val VIBRATION_CHANNEL = "com.enabletech.autogolfcrm/vibration"
-    private val NOTIFICATION_CHANNEL = "com.enabletech.autogolfcrm/notification"
+    private val CHANNEL = "app.mygolfplanner/intent_launcher"
+    private val VIBRATION_CHANNEL = "app.mygolfplanner/vibration"
+    private val NOTIFICATION_CHANNEL = "app.mygolfplanner/notification"
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         // Firebase 플러그인이 먼저 등록되도록 super 호출

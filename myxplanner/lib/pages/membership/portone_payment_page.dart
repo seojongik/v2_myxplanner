@@ -45,7 +45,7 @@ class _PortonePaymentPageState extends State<PortonePaymentPage> {
   WebViewController? _webViewController;
   bool _isLoading = true;
   bool _isRedirectHandled = false; // 리디렉션 결과 처리 여부
-  static const MethodChannel _intentChannel = MethodChannel('com.enabletech.autogolfcrm/intent_launcher');
+  static const MethodChannel _intentChannel = MethodChannel('app.mygolfplanner/intent_launcher');
 
   @override
   void initState() {

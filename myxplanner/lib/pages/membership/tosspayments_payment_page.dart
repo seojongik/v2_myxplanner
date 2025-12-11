@@ -50,7 +50,7 @@ class _TosspaymentsPaymentPageState extends State<TosspaymentsPaymentPage> {
   bool _isLoading = true;
   bool _isProcessing = false; // 결제 승인 처리 중
   bool _isRedirectHandled = false;
-  static const MethodChannel _intentChannel = MethodChannel('com.enabletech.autogolfcrm/intent_launcher');
+  static const MethodChannel _intentChannel = MethodChannel('app.mygolfplanner/intent_launcher');
 
   @override
   void initState() {

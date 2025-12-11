@@ -1,0 +1,5 @@
+# App Store Connect에서 확인 가능한 앱 정보
+app_identifier("mygolfplanner.app")
+apple_id("enabletech@me.com")
+team_id("JXM6K725Y2")
+

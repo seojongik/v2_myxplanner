@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../models/board_model.dart';
 import '../../../services/board_service.dart';
+import '../../../services/content_filter_service.dart';
+import '../../../widgets/chat_eula_dialog.dart';
 
 class BoardCreatePage extends StatefulWidget {
   final String? branchId;
@@ -29,6 +31,7 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
   String _postStatus = '진행';
   DateTime? _postDueDate;
   bool _isSubmitting = false;
+  bool _eulaAccepted = false;
 
   final List<Map<String, dynamic>> _boardTypes = [
     {'value': '공지사항', 'label': '공지사항'},
@@ -47,11 +50,28 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
       _selectedBoardType = widget.editingBoard!.boardType;
       _postStatus = widget.editingBoard!.postStatus ?? '진행';
       _postDueDate = widget.editingBoard!.postDueDate;
+      _eulaAccepted = true; // 수정 시에는 이미 동의한 것으로 간주
     } else if (widget.initialBoardType != null && widget.initialBoardType!.isNotEmpty) {
       _selectedBoardType = widget.initialBoardType!;
     } else {
       _selectedBoardType = '공지사항'; // 기본값을 공지사항으로
     }
+    
+    // 새 글 작성 시 EULA 확인
+    if (widget.editingBoard == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkEula());
+    }
+  }
+
+  Future<void> _checkEula() async {
+    final accepted = await ChatEulaDialog.show(context);
+    if (!accepted) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() {
+      _eulaAccepted = true;
+    });
   }
 
   @override
@@ -125,13 +145,51 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
       return;
     }
 
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+
+    // 콘텐츠 필터링 검사
+    final (titleAllowed, titleReason) = ContentFilterService.validateMessage(title);
+    if (!titleAllowed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '제목에 $titleReason',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Colors.red[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final (contentAllowed, contentReason) = ContentFilterService.validateMessage(content);
+    if (!contentAllowed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '내용에 $contentReason',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Colors.red[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
     });
 
     final memberId = widget.selectedMember!['member_id']?.toString() ?? '';
-    final title = _titleController.text.trim();
-    final content = _contentController.text.trim();
 
     print('=== 폼 제출 시작 ===');
     print('제목: "$title"');

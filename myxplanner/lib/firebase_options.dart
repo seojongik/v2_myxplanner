@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyB88lKjes3zXeszyUjll85-0YJorZ_Atzk',
-    appId: '1:101436238734:android:79880c733be09b34ff92df',
+    appId: '1:101436238734:android:7a40420f05ccc85dff92df',
     messagingSenderId: '101436238734',
     projectId: 'autogolfcrm-messaging',
     storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
@@ -60,21 +60,21 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDEOYkNI_tV7WoLvs2zhUkiL6oNYDgXxnY',
-    appId: '1:101436238734:ios:e2e727d584fd95b0ff92df',
+    appId: '1:101436238734:ios:55470b4f055179f8ff92df',
     messagingSenderId: '101436238734',
     projectId: 'autogolfcrm-messaging',
     storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
-    iosBundleId: 'com.enabletech.autogolfcrm',
-    iosClientId: '101436238734-bmlocoto647fghs7g646sfv8elkggjae.apps.googleusercontent.com',
+    iosBundleId: 'mygolfplanner.app',
+    iosClientId: '101436238734-9qm1l51gkokl3ii6ar86g0m8s76p2v2s.apps.googleusercontent.com',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDEOYkNI_tV7WoLvs2zhUkiL6oNYDgXxnY',
-    appId: '1:101436238734:ios:e2e727d584fd95b0ff92df',
+    appId: '1:101436238734:ios:55470b4f055179f8ff92df',
     messagingSenderId: '101436238734',
     projectId: 'autogolfcrm-messaging',
     storageBucket: 'autogolfcrm-messaging.firebasestorage.app',
-    iosBundleId: 'com.enabletech.autogolfcrm',
+    iosBundleId: 'mygolfplanner.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

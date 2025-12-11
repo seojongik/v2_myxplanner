@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'chatting_service.dart';
 import 'chat_models.dart';
 import '../api_service.dart';
+import '../content_filter_service.dart';
+import '../chat_report_service.dart';
+import '../../widgets/chat_eula_dialog.dart';
 import 'dart:async';
 
 class ChattingPage extends StatefulWidget {
@@ -16,20 +19,22 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
   ChatRoom? _chatRoom;
   List<ChatMessage> _messages = [];
   bool _isInitializing = true;
+  bool _eulaAccepted = false;
   StreamSubscription<List<ChatMessage>>? _messagesSubscription;
   bool _showEmojiPicker = false;
+  List<String> _blockedUserIds = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    ChattingService.setChatPageActive(true); // 채팅 페이지 활성화
-    _initializeChat();
+    ChattingService.setChatPageActive(true);
+    _checkEulaAndInitialize();
   }
 
   @override
   void dispose() {
-    ChattingService.setChatPageActive(false); // 채팅 페이지 비활성화
+    ChattingService.setChatPageActive(false);
     _messagesSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
@@ -41,10 +46,33 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      // 앱이 포그라운드로 돌아왔을 때 관리자 메시지 읽음 처리
       print('🔄 [ChattingUI] 앱 포그라운드 복귀 - 관리자 메시지 읽음 처리');
       ChattingService.markAdminMessagesAsRead();
     }
+  }
+
+  /// EULA 동의 확인 후 채팅 초기화
+  Future<void> _checkEulaAndInitialize() async {
+    // EULA 동의 확인
+    final accepted = await ChatEulaDialog.show(context);
+    
+    if (!accepted) {
+      // 동의하지 않으면 이전 화면으로
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+    
+    setState(() {
+      _eulaAccepted = true;
+    });
+    
+    // 차단된 사용자 목록 로드
+    _blockedUserIds = await ChatReportService.getBlockedUserIds();
+    
+    // 채팅 초기화
+    _initializeChat();
   }
 
   Future<void> _initializeChat() async {
@@ -56,89 +84,55 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
         _isInitializing = false;
       });
 
-      _messagesSubscription?.cancel(); // 기존 구독이 있다면 취소
+      _messagesSubscription?.cancel();
       
       int previousMessageCount = _messages.length;
       
       _messagesSubscription = ChattingService.getMessagesStream().listen((messages) {
         if (messages != null) {
-          // 현재 사용자 ID 가져오기 (매번 최신 값으로 가져옴)
           final currentUser = ApiService.getCurrentUser();
           final currentMemberId = currentUser?['member_id']?.toString();
           final isAdmin = ApiService.isAdminLogin();
           
-          // 타입 명시
           final List<ChatMessage> messageList = messages;
           
-          // 새로운 메시지가 있고, 이전 메시지가 있었던 경우만 알림 재생
           if (messageList.length > previousMessageCount && previousMessageCount > 0) {
             final newMessages = messageList.skip(previousMessageCount).toList();
             
-            // 회원인 경우: 관리자가 보낸 새 메시지만 알림 재생
-            // 관리자인 경우: 회원이 보낸 새 메시지만 알림 재생
-            // 자신이 보낸 메시지는 제외 (senderId 비교)
             final messagesToNotify = <ChatMessage>[];
-            final messagesIgnored = <ChatMessage>[];
             
             for (final msg in newMessages) {
-              // senderId 비교 (문자열로 정확히 비교)
               final msgSenderId = msg.senderId.toString().trim();
               final myId = (currentMemberId?.toString() ?? '').trim();
               final isMyMessage = msgSenderId == myId && myId.isNotEmpty;
               
-              // 자신이 보낸 메시지면 알림 제외
-              if (isMyMessage) {
-                messagesIgnored.add(msg);
-                continue;
-              }
+              if (isMyMessage) continue;
               
-              // 상대방 타입 확인
+              // 차단된 사용자 메시지는 알림 제외
+              if (_blockedUserIds.contains(msg.senderId)) continue;
+              
               final shouldNotify = isAdmin 
-                  ? msg.senderType == 'member'  // 관리자인 경우: 회원 메시지만
-                  : msg.senderType == 'admin';  // 회원인 경우: 관리자 메시지만
+                  ? msg.senderType == 'member'
+                  : msg.senderType == 'admin';
               
               if (shouldNotify) {
                 messagesToNotify.add(msg);
-              } else {
-                messagesIgnored.add(msg);
               }
-            }
-            
-            // 로그 출력 (컴팩트하게)
-            for (final msg in newMessages) {
-              final msgSenderId = msg.senderId.toString().trim();
-              final myId = (currentMemberId?.toString() ?? '').trim();
-              final isMyMessage = msgSenderId == myId && myId.isNotEmpty;
-              final willNotify = messagesToNotify.contains(msg);
-              
-              final senderInfo = isMyMessage 
-                  ? '나($msgSenderId)' 
-                  : '${msg.senderType}($msgSenderId)';
-              final messagePreview = msg.message.length > 30 
-                  ? '${msg.message.substring(0, 30)}...' 
-                  : msg.message;
-              final notifyStatus = willNotify ? '🔔 알림' : '🔕 무시';
-              
-              print('📨 [Chat] $senderInfo: "$messagePreview" | $notifyStatus');
             }
             
             if (messagesToNotify.isNotEmpty) {
               print('✅ [Chat] 알림 재생: ${messagesToNotify.length}개 메시지');
               ChattingService.playNotificationSound();
-            } else {
-              print('⏭️ [Chat] 알림 없음: 모두 자신이 보낸 메시지이거나 상대방 타입이 아님');
             }
           }
           
           previousMessageCount = messageList.length;
           
-          // 새로운 관리자 메시지가 있으면 자동으로 읽음 처리
           final unreadAdminMessages = messageList.where((msg) => 
             msg.senderType == 'admin' && !msg.isRead
           ).toList();
           
           if (unreadAdminMessages.isNotEmpty) {
-            // 잠시 후 읽음 처리 (사용자가 메시지를 볼 시간을 줌)
             Future.delayed(Duration(milliseconds: 1000), () {
               if (mounted && _messagesSubscription != null && !_messagesSubscription!.isPaused) {
                 ChattingService.markAdminMessagesAsRead();
@@ -149,11 +143,12 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
         
         if (mounted && _messagesSubscription != null && !_messagesSubscription!.isPaused) {
           setState(() {
-            _messages = messages ?? [];
+            // 차단된 사용자 메시지 필터링
+            _messages = (messages ?? []).where((msg) => 
+              !_blockedUserIds.contains(msg.senderId)
+            ).toList();
           });
           _scrollToBottom();
-        } else {
-          print('⚠️ [ChattingUI] 위젯이 mounted되지 않거나 구독이 취소됨');
         }
       }, onError: (error) {
         print('❌ [ChattingUI] 메시지 스트림 에러: $error');
@@ -168,7 +163,6 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
       
     } catch (e) {
       print('❌ 채팅 초기화 실패: $e');
-      print('❌ 스택 트레이스: ${StackTrace.current}');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -203,9 +197,20 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
     final message = _messageController.text.trim();
     if (message.isEmpty) return;
 
+    // 콘텐츠 필터링
+    final (isAllowed, reason) = ContentFilterService.validateMessage(message);
+    if (!isAllowed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(reason ?? '메시지를 전송할 수 없습니다.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     _messageController.clear();
     
-    // 메시지 전송 후 이모티콘 창 닫기
     if (_showEmojiPicker) {
       setState(() {
         _showEmojiPicker = false;
@@ -221,10 +226,247 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
     }
   }
 
+  /// 메시지 옵션 다이얼로그 (신고/삭제)
+  void _showMessageOptions(ChatMessage message) {
+    final currentUser = ApiService.getCurrentUser();
+    final isMyMessage = message.senderId == currentUser?['member_id']?.toString();
+    
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            if (isMyMessage) ...[
+              // 내 메시지: 삭제만 가능
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: Colors.red),
+                title: Text('메시지 삭제'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeleteMessage(message);
+                },
+              ),
+            ] else ...[
+              // 상대방 메시지: 신고/차단
+              ListTile(
+                leading: Icon(Icons.flag_outlined, color: Colors.orange),
+                title: Text('신고하기'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showReportDialog(message);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.block, color: Colors.red),
+                title: Text('차단하기'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmBlockUser(message);
+                },
+              ),
+            ],
+            SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 메시지 삭제 확인
+  void _confirmDeleteMessage(ChatMessage message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('메시지 삭제'),
+        content: Text('이 메시지를 삭제하시겠습니까?\n삭제된 메시지는 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await ChatReportService.deleteMessage(
+                messageId: message.id,
+              );
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('메시지가 삭제되었습니다.')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('삭제', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 신고 다이얼로그
+  void _showReportDialog(ChatMessage message) {
+    final reasons = ChatReportService.getReportReasons();
+    String? selectedReason;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.flag, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('신고하기'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '신고 사유를 선택해주세요.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 12),
+              ...reasons.map((reason) => RadioListTile<String>(
+                title: Text(reason, style: TextStyle(fontSize: 14)),
+                value: reason,
+                groupValue: selectedReason,
+                onChanged: (value) {
+                  setState(() {
+                    selectedReason = value;
+                  });
+                },
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )),
+              SizedBox(height: 8),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '신고된 내용은 24시간 이내에 검토됩니다.',
+                        style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: selectedReason == null ? null : () async {
+                Navigator.pop(context);
+                final success = await ChatReportService.reportMessage(
+                  messageId: message.id,
+                  chatRoomId: message.chatRoomId,
+                  reportedSenderId: message.senderId,
+                  reportedSenderType: message.senderType,
+                  messageContent: message.message,
+                  reportReason: selectedReason!,
+                );
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('신고가 접수되었습니다. 24시간 이내에 검토됩니다.')),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: Text('신고', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 차단 확인
+  void _confirmBlockUser(ChatMessage message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('사용자 차단'),
+        content: Text(
+          '이 사용자를 차단하시겠습니까?\n'
+          '차단된 사용자의 메시지는 더 이상 표시되지 않습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await ChatReportService.blockUser(
+                blockedUserId: message.senderId,
+                blockedUserType: message.senderType,
+              );
+              if (success) {
+                // 차단 목록 업데이트
+                _blockedUserIds = await ChatReportService.getBlockedUserIds();
+                // 메시지 목록에서 차단된 사용자 메시지 제거
+                setState(() {
+                  _messages = _messages.where((msg) => 
+                    !_blockedUserIds.contains(msg.senderId)
+                  ).toList();
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('사용자가 차단되었습니다.')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('차단', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentBranch = ApiService.getCurrentBranch();
     final branchName = currentBranch?['branch_name'] ?? '골프연습장';
+    
+    // EULA 동의 전에는 로딩 표시
+    if (!_eulaAccepted) {
+      return Scaffold(
+        backgroundColor: Color(0xFFB8C5D6),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.black54),
+          ),
+        ),
+      );
+    }
     
     return Scaffold(
       appBar: AppBar(
@@ -240,13 +482,25 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
         elevation: 0,
         iconTheme: IconThemeData(color: Colors.black87),
         actions: [
-          IconButton(
-            icon: Icon(Icons.search, color: Colors.black87),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: Icon(Icons.menu, color: Colors.black87),
-            onPressed: () {},
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: Colors.black87),
+            onSelected: (value) {
+              if (value == 'blocked') {
+                _showBlockedUsers();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'blocked',
+                child: Row(
+                  children: [
+                    Icon(Icons.block, size: 20, color: Colors.grey[700]),
+                    SizedBox(width: 8),
+                    Text('차단 목록 관리'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -281,8 +535,47 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
     );
   }
 
+  /// 차단 목록 관리
+  void _showBlockedUsers() async {
+    if (_blockedUserIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('차단된 사용자가 없습니다.')),
+      );
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('차단 목록'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _blockedUserIds.map((userId) => ListTile(
+            title: Text('사용자 $userId'),
+            trailing: TextButton(
+              onPressed: () async {
+                await ChatReportService.unblockUser(blockedUserId: userId);
+                _blockedUserIds = await ChatReportService.getBlockedUserIds();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('차단이 해제되었습니다.')),
+                );
+              },
+              child: Text('해제', style: TextStyle(color: Colors.blue)),
+            ),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('닫기'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageList() {
-    // 브랜치 이름 가져오기
     final currentBranch = ApiService.getCurrentBranch();
     final branchName = currentBranch?['branch_name'] ?? '골프연습장';
     
@@ -299,7 +592,7 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
             ),
             SizedBox(height: 8),
             Text(
-              'Firebase 연결을 확인해주세요',
+              '네트워크 연결을 확인해주세요',
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
             SizedBox(height: 16),
@@ -503,7 +796,6 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
     );
   }
 
-  // 자주 사용하는 이모티콘 목록
   final List<String> _commonEmojis = [
     '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
     '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
@@ -511,27 +803,14 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
     '🤪', '🤨', '🧐', '🤓', '😎', '🥸', '🤩', '🥳',
     '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️',
     '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤',
-    '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱',
-    '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫',
-    '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦',
-    '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵',
-    '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕',
-    '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩',
-    '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺',
-    '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾',
     '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙',
-    '👈', '👉', '👆', '🖕', '👇', '☝️', '👋', '🤚',
-    '🖐️', '✋', '🖖', '👏', '🙌', '🤲', '🤝', '🙏',
     '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍',
-    '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖',
-    '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️',
   ];
 
   void _insertEmoji(String emoji) {
     final text = _messageController.text;
     final selection = _messageController.selection;
     
-    // selection 범위 검증
     final start = selection.start.clamp(0, text.length);
     final end = selection.end.clamp(0, text.length);
     
@@ -547,7 +826,6 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
   Widget _buildMessageItem(ChatMessage message, String branchName) {
     final isMyMessage = message.senderType == 'member';
     
-    // 상대방 메시지일 때 발신자 라벨 생성
     String? senderLabel;
     if (!isMyMessage) {
       switch (message.senderType) {
@@ -558,148 +836,128 @@ class _ChattingPageState extends State<ChattingPage> with WidgetsBindingObserver
           senderLabel = '매니저';
           break;
         case 'pro':
-          // 프로는 이름 + " 프로" 형식
           final proName = message.senderName.isNotEmpty 
               ? message.senderName 
               : '프로';
           senderLabel = '$proName 프로';
           break;
         default:
-          // 기본값: 지점명 (기존 동작 유지)
           senderLabel = branchName;
           break;
       }
     }
     
-    return Container(
-      margin: EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: isMyMessage 
-            ? MainAxisAlignment.end 
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isMyMessage) ...[
-            // sender_type별 아이콘 및 색상
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: _getAvatarColor(message.senderType),
-              child: Icon(
-                _getAvatarIcon(message.senderType),
-                size: 18,
-                color: Colors.white,
+    return GestureDetector(
+      onLongPress: () => _showMessageOptions(message),
+      child: Container(
+        margin: EdgeInsets.only(bottom: 8),
+        child: Row(
+          mainAxisAlignment: isMyMessage 
+              ? MainAxisAlignment.end 
+              : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isMyMessage) ...[
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: _getAvatarColor(message.senderType),
+                child: Icon(
+                  _getAvatarIcon(message.senderType),
+                  size: 18,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isMyMessage 
-                  ? CrossAxisAlignment.end 
-                  : CrossAxisAlignment.start,
-              children: [
-                if (!isMyMessage && senderLabel != null) ...[
-                  Padding(
-                    padding: EdgeInsets.only(left: 8, bottom: 2),
+              SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: isMyMessage 
+                    ? CrossAxisAlignment.end 
+                    : CrossAxisAlignment.start,
+                children: [
+                  if (!isMyMessage && senderLabel != null) ...[
+                    Padding(
+                      padding: EdgeInsets.only(left: 8, bottom: 2),
+                      child: Text(
+                        senderLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                  Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.7,
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isMyMessage ? Color(0xFFFFEB3B) : Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
                     child: Text(
-                      senderLabel,
+                      message.message,
                       style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                        fontSize: 15,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: isMyMessage ? 0 : 8,
+                      right: isMyMessage ? 8 : 0,
+                    ),
+                    child: Text(
+                      _formatTimeSimple(message.timestamp),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.black45,
                       ),
                     ),
                   ),
                 ],
-                Container(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.7,
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isMyMessage ? Color(0xFFFFEB3B) : Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Text(
-                    message.message,
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontSize: 15,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 2),
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: isMyMessage ? 0 : 8,
-                    right: isMyMessage ? 8 : 0,
-                  ),
-                  child: Text(
-                    _formatTimeSimple(message.timestamp),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.black45,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
-  }
-
-  String _formatTime(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-    
-    if (difference.inMinutes < 1) {
-      return '방금 전';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}분 전';
-    } else if (difference.inDays < 1) {
-      return '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays < 7) {
-      final weekdays = ['월', '화', '수', '목', '금', '토', '일'];
-      return '${weekdays[timestamp.weekday - 1]} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
-    } else {
-      return '${timestamp.month}/${timestamp.day} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
-    }
   }
 
   String _formatTimeSimple(DateTime timestamp) {
     return '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
   }
 
-  // sender_type별 아바타 아이콘 가져오기
   IconData _getAvatarIcon(String senderType) {
     switch (senderType) {
       case 'admin':
-        return Icons.golf_course; // 골프 홀 아이콘
+        return Icons.golf_course;
       case 'manager':
         return Icons.supervisor_account;
       case 'pro':
-        return Icons.school; // 레슨 아이콘
+        return Icons.school;
       case 'member':
       default:
         return Icons.account_circle;
     }
   }
 
-  // sender_type별 아바타 배경색 가져오기
   Color _getAvatarColor(String senderType) {
     switch (senderType) {
       case 'admin':
-        return Color(0xFF3B82F6); // 파란색
+        return Color(0xFF3B82F6);
       case 'manager':
-        return Color(0xFF8B5CF6); // 보라색
+        return Color(0xFF8B5CF6);
       case 'pro':
-        return Color(0xFF10B981); // 초록색
+        return Color(0xFF10B981);
       case 'member':
       default:
-        return Color(0xFF64748B); // 회색
+        return Color(0xFF64748B);
     }
   }
 }
