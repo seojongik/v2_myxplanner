@@ -13,7 +13,7 @@ REMOTE_URL = 'https://github.com/seojongik/v2_autogolf-project.git'
 # 서브프로젝트 설정 (이름, 폴더, push 스크립트)
 SUBPROJECTS = [
     {'name': 'CRM', 'folder': 'crm', 'script': 'crm/crm_push.py'},
-    {'name': 'CRM Lite Pro', 'folder': 'crm_lite_pro', 'script': 'crm_lite_pro/crm_lite_pro_push.py', 'is_submodule': True},
+    {'name': 'CRM Lite Pro', 'folder': 'crm_lite_pro', 'script': 'crm_lite_pro/crm_lite_pro_push.py'},
     {'name': 'Landing', 'folder': 'landing', 'script': 'landing/landing_push.py'},
     {'name': 'Planner', 'folder': 'myxplanner', 'script': 'myxplanner/planner_push.py'},
 ]
