@@ -25,7 +25,7 @@ interface PaymentDialogProps {
 
 // 포트원 설정
 const STORE_ID = 'store-58c8f5b8-6bc6-4efb-8dd0-8a98475a4246';
-const CHANNEL_KEY = 'channel-key-4103c2a4-ab14-4707-bdb3-6c6254511ba0'; // 일반결제용
+const CHANNEL_KEY = 'channel-key-4ba942b1-404c-4b2b-86b5-143093f9d21f'; // 실연동 (MID: im_ineibl8beo)
 // 정기결제용 채널키 (토스페이먼츠 테스트 MID: iamporttest_4)
 const BILLING_CHANNEL_KEY = 'channel-key-1d9b30a1-2ce2-4879-adce-1420174d4e1a';
 
