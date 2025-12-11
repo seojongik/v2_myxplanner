@@ -38,3 +38,6 @@ firebase-service-account.json
 *.xcarchive/
 *.dSYM/
 *.app.dSYM/
+
+# 민감한 계정 정보
+non-git/ACCOUNT_INFO.md
