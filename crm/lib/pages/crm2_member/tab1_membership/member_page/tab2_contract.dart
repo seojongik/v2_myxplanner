@@ -6,7 +6,6 @@ import 'tab2_contract_new.dart';
 import 'tab3_credit.dart' show ManualCreditDialog, ProductPurchaseDialog;
 import 'tab2_contract_setting_viewer.dart';
 import 'tab2_contract_receipt.dart';
-import 'tab2_contract_program_viewer.dart';
 import 'tab2_contract_expiry_change.dart';
 import 'tab2_contract_popup_design.dart';
 import 'tab2_contract_time_manual.dart';
@@ -647,22 +646,7 @@ class _Tab2ContractWidgetState extends State<Tab2ContractWidget> {
         final programId = entry.key;
         final programName = entry.value;
         
-        tags.add(Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return ProgramViewerDialog(
-                    programId: programId,
-                    programName: programName,
-                  );
-                },
-              );
-            },
-            borderRadius: BorderRadius.circular(4),
-            child: Container(
+        tags.add(Container(
               margin: EdgeInsets.only(left: 4),
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -689,8 +673,7 @@ class _Tab2ContractWidgetState extends State<Tab2ContractWidget> {
                 ],
               ),
             ),
-          ),
-        ));
+        );
       }
     }
     
@@ -1078,9 +1061,6 @@ class _Tab2ContractWidgetState extends State<Tab2ContractWidget> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: 4),
-                                // 예약 가능 프로그램 태그들
-                                ..._buildProgramReservationTags(contract),
                               ],
                             ),
                           ),

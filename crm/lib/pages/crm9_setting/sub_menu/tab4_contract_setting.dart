@@ -353,6 +353,21 @@ class _Tab4ContractSettingWidgetState extends State<Tab4ContractSettingWidget> {
       changedFields.add('program_reservation_availability');
     }
     
+    // 선택가능 타석제한 비교
+    String normalizeProhibitedTsId(dynamic value) {
+      if (value == null || value.toString().trim().isEmpty) {
+        return '';
+      }
+      // 콤마로 구분된 ID들을 정렬하여 비교
+      final ids = value.toString().split(',').map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
+      ids.sort();
+      return ids.join(',');
+    }
+    
+    if (normalizeProhibitedTsId(originalContract['prohibited_ts_id']) != normalizeProhibitedTsId(newContract['prohibited_ts_id'])) {
+      changedFields.add('prohibited_ts_id');
+    }
+    
     return await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -632,6 +647,13 @@ class _Tab4ContractSettingWidgetState extends State<Tab4ContractSettingWidget> {
                                 final newProgram = newContract['program_reservation_availability']?.toString() ?? '';
                                 originalValue = originalProgram.isEmpty ? '연결 안됨' : originalProgram;
                                 newValue = newProgram.isEmpty ? '연결 안됨' : newProgram;
+                                break;
+                              case 'prohibited_ts_id':
+                                label = '선택가능 타석제한';
+                                final originalProhibited = originalContract['prohibited_ts_id']?.toString() ?? '';
+                                final newProhibited = newContract['prohibited_ts_id']?.toString() ?? '';
+                                originalValue = originalProhibited.isEmpty ? '전체 타석 선택가능' : '${originalProhibited.split(',').join(', ')}번 제한';
+                                newValue = newProhibited.isEmpty ? '전체 타석 선택가능' : '${newProhibited.split(',').join(', ')}번 제한';
                                 break;
                             }
                             
@@ -1020,26 +1042,31 @@ class _Tab4ContractSettingWidgetState extends State<Tab4ContractSettingWidget> {
       print('저장할 데이터: $contractData');
       print('program_reservation_availability: ${contractData['program_reservation_availability']}');
       
+      // temporary_program_data는 DB에 저장하지 않으므로 제거
+      final temporaryProgramData = contractData['temporary_program_data'];
+      final dataToSave = Map<String, dynamic>.from(contractData);
+      dataToSave.remove('temporary_program_data');
+      
       if (isEditing) {
         await ApiService.updateContractsData(
-          contractData,
+          dataToSave,
           [{'field': 'contract_id', 'operator': '=', 'value': contractData['contract_id']}],
         );
         print('회원권 수정 성공');
         
         // 임시 프로그램 데이터가 있는 경우 실제 저장
-        if (contractData['temporary_program_data'] != null) {
-          await _saveProgramToDatabase(contractData['temporary_program_data']);
+        if (temporaryProgramData != null) {
+          await _saveProgramToDatabase(temporaryProgramData);
         }
         
         _showSuccessSnackBar('회원권 정보가 수정되었습니다');
       } else {
-        await ApiService.addContractsData(contractData);
+        await ApiService.addContractsData(dataToSave);
         print('회원권 추가 성공');
         
         // 신규 회원권에 임시 프로그램 데이터가 있는 경우 실제 저장
-        if (contractData['temporary_program_data'] != null) {
-          await _saveProgramToDatabase(contractData['temporary_program_data']);
+        if (temporaryProgramData != null) {
+          await _saveProgramToDatabase(temporaryProgramData);
         }
         
         _showSuccessSnackBar('새로운 회원권이 추가되었습니다');
@@ -1608,6 +1635,11 @@ class _ContractDialogState extends State<ContractDialog> {
   // 타석 예약제한 관련
   late TextEditingController _maxMinReservationAheadController;
   bool _useDefaultReservationLimit = true;
+  // 선택가능 타석제한 관련
+  bool _useAllTsAvailable = true; // 전체 타석 선택가능 (기본값)
+  List<String> _selectedProhibitedTsIds = []; // 예약 제한할 타석 ID 리스트
+  List<Map<String, dynamic>> _availableTsList = []; // 사용 가능한 타석 목록
+  bool _isLoadingTsList = false;
   // 쿠폰 발급/사용 제한 관련
   bool _useDefaultCouponSettings = true;
   bool _couponIssueAvailable = true;
@@ -1697,6 +1729,49 @@ class _ContractDialogState extends State<ContractDialog> {
     _initializeControllers();
     _loadContractTypeOptions();
     _loadAvailablePrograms();
+    _loadAvailableTsList();
+  }
+
+  // 타석 목록 로드
+  Future<void> _loadAvailableTsList() async {
+    setState(() {
+      _isLoadingTsList = true;
+    });
+
+    try {
+      final branchId = ApiService.getCurrentBranchId();
+      if (branchId == null) {
+        setState(() {
+          _isLoadingTsList = false;
+        });
+        return;
+      }
+
+      final tsList = await SupabaseAdapter.getData(
+        table: 'v2_ts_info',
+        fields: ['ts_id', 'ts_type', 'ts_status'],
+        where: [
+          {'field': 'branch_id', 'operator': '=', 'value': branchId},
+          {'field': 'ts_status', 'operator': '=', 'value': '예약가능'},
+        ],
+        orderBy: [
+          {'field': 'ts_id', 'direction': 'ASC'}
+        ],
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableTsList = tsList;
+        _isLoadingTsList = false;
+      });
+    } catch (e) {
+      print('타석 목록 로드 실패: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingTsList = false;
+      });
+    }
   }
 
   // 프로그램 데이터 로드
@@ -2104,6 +2179,20 @@ class _ContractDialogState extends State<ContractDialog> {
       _selectedProgramId = contract['program_reservation_availability']?.toString() ?? '';
       print('회원권 데이터에서 프로그램 ID: ${_selectedProgramId}');
       print('회원권 전체 데이터: ${contract}');
+      
+      // 선택가능 타석제한 초기화
+      final prohibitedTsId = contract['prohibited_ts_id']?.toString() ?? '';
+      if (prohibitedTsId.isEmpty) {
+        _useAllTsAvailable = true;
+        _selectedProhibitedTsIds = [];
+      } else {
+        _useAllTsAvailable = false;
+        _selectedProhibitedTsIds = prohibitedTsId.split(',').where((id) => id.trim().isNotEmpty).toList();
+        print('제한된 타석 ID: $_selectedProhibitedTsIds');
+      }
+    } else {
+      _useAllTsAvailable = true;
+      _selectedProhibitedTsIds = [];
     }
   }
 
@@ -2211,6 +2300,8 @@ class _ContractDialogState extends State<ContractDialog> {
       'contract_term_month_effect_month': int.tryParse(_contractTermMonthEffectMonthController.text.replaceAll(',', '')) ?? 0,
       'program_reservation_availability': _selectedProgramId.isNotEmpty ? _selectedProgramId : null,
       'temporary_program_data': _temporaryProgramData, // 신규 회원권의 임시 프로그램 데이터
+      // 선택가능 타석제한: 전체 타석 선택가능이면 null, 아니면 선택된 타석 ID들을 콤마로 구분하여 저장
+      'prohibited_ts_id': _useAllTsAvailable ? null : (_selectedProhibitedTsIds.isNotEmpty ? _selectedProhibitedTsIds.join(',') : null),
     };
 
     print('📦 저장할 데이터 준비 완료:');
@@ -3884,14 +3975,14 @@ class _ContractDialogState extends State<ContractDialog> {
                                 // 구분선
                                 Divider(color: Colors.grey.shade300, thickness: 1),
                                 SizedBox(height: 16),
-                                // 타석 예약제한 섹션
+                                // 타석예약시간 제한 섹션
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     SizedBox(
                                       width: 140,
                                       child: Text(
-                                        '타석 예약제한',
+                                        '타석예약시간 제한',
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
@@ -3998,6 +4089,190 @@ class _ContractDialogState extends State<ContractDialog> {
                                               ),
                                             ),
                                           ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                // 선택가능 타석제한 섹션
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: 140,
+                                      child: Text(
+                                        '선택가능 타석제한',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // 라디오 버튼: 전체 타석 선택가능 / 타석 선택
+                                          Row(
+                                            children: [
+                                              Radio<bool>(
+                                                value: true,
+                                                groupValue: _useAllTsAvailable,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _useAllTsAvailable = value!;
+                                                    if (_useAllTsAvailable) {
+                                                      _selectedProhibitedTsIds = [];
+                                                    }
+                                                  });
+                                                },
+                                                activeColor: Color(0xFF6366F1),
+                                                fillColor: MaterialStateProperty.resolveWith<Color>(
+                                                  (Set<MaterialState> states) {
+                                                    if (states.contains(MaterialState.selected)) {
+                                                      return Color(0xFF6366F1);
+                                                    }
+                                                    return Color(0xFF6366F1).withOpacity(0.3);
+                                                  },
+                                                ),
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              Text(
+                                                '전체 타석 선택가능',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                              SizedBox(width: 16),
+                                              Radio<bool>(
+                                                value: false,
+                                                groupValue: _useAllTsAvailable,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _useAllTsAvailable = value!;
+                                                  });
+                                                },
+                                                activeColor: Color(0xFF6366F1),
+                                                fillColor: MaterialStateProperty.resolveWith<Color>(
+                                                  (Set<MaterialState> states) {
+                                                    if (states.contains(MaterialState.selected)) {
+                                                      return Color(0xFF6366F1);
+                                                    }
+                                                    return Color(0xFF6366F1).withOpacity(0.3);
+                                                  },
+                                                ),
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              Text(
+                                                '타석 선택',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          // 타석 선택 버튼들
+                                          if (!_useAllTsAvailable) ...[
+                                            SizedBox(height: 12),
+                                            _isLoadingTsList
+                                                ? Padding(
+                                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                                    child: Row(
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 16,
+                                                          height: 16,
+                                                          child: CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                                                          ),
+                                                        ),
+                                                        SizedBox(width: 8),
+                                                        Text(
+                                                          '타석 목록 로딩 중...',
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                            color: Colors.grey.shade600,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  )
+                                                : _availableTsList.isEmpty
+                                                    ? Padding(
+                                                        padding: EdgeInsets.symmetric(vertical: 8),
+                                                        child: Text(
+                                                          '사용 가능한 타석이 없습니다.',
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                            color: Colors.grey.shade600,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : Wrap(
+                                                        spacing: 6,
+                                                        runSpacing: 6,
+                                                        children: _availableTsList.map((ts) {
+                                                          final tsId = ts['ts_id']?.toString() ?? '';
+                                                          final isSelected = _selectedProhibitedTsIds.contains(tsId);
+                                                          return GestureDetector(
+                                                            onTap: () {
+                                                              setState(() {
+                                                                if (isSelected) {
+                                                                  _selectedProhibitedTsIds.remove(tsId);
+                                                                } else {
+                                                                  _selectedProhibitedTsIds.add(tsId);
+                                                                }
+                                                              });
+                                                            },
+                                                            child: Container(
+                                                              width: 36,
+                                                              height: 28,
+                                                              decoration: BoxDecoration(
+                                                                color: isSelected
+                                                                    ? Color(0xFF6366F1)
+                                                                    : Colors.white,
+                                                                border: Border.all(
+                                                                  color: isSelected
+                                                                      ? Color(0xFF6366F1)
+                                                                      : Color(0xFF6366F1).withOpacity(0.5),
+                                                                  width: 1.5,
+                                                                ),
+                                                                borderRadius: BorderRadius.circular(6),
+                                                              ),
+                                                              child: Center(
+                                                                child: Text(
+                                                                  tsId,
+                                                                  style: TextStyle(
+                                                                    fontSize: 12,
+                                                                    fontWeight: FontWeight.w600,
+                                                                    color: isSelected
+                                                                        ? Colors.white
+                                                                        : Color(0xFF6366F1),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }).toList(),
+                                                      ),
+                                            if (!_useAllTsAvailable && _selectedProhibitedTsIds.isNotEmpty) ...[
+                                              SizedBox(height: 8),
+                                              Text(
+                                                '선택된 타석: ${_selectedProhibitedTsIds.join(', ')}번 (예약 제한됨)',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey.shade600,
+                                                  fontStyle: FontStyle.italic,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ],
                                       ),
                                     ),

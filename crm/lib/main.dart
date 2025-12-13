@@ -5,6 +5,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'backend/firebase/firebase_config.dart';
 import 'services/chat_notification_service.dart';
+import 'services/fcm_service.dart';
 import 'services/session_manager.dart';
 import 'services/supabase_adapter.dart';
 import 'services/config_service.dart';
@@ -33,6 +34,10 @@ void main() async {
   // 채팅 알림 서비스 초기화
   await ChatNotificationService().initialize();
   print('🔔 채팅 알림 서비스 초기화 완료');
+  
+  // FCM 서비스 초기화
+  await FCMService.initialize();
+  print('📱 FCM 서비스 초기화 완료');
   
   runApp(MyApp());
 }

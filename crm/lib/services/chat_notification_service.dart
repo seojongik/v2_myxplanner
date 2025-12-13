@@ -26,7 +26,50 @@ class ChatNotificationService extends ChangeNotifier {
   // 최신 메시지 정보 캐시
   Map<String, dynamic>? _latestMessageInfo;
 
+  // 채팅 페이지가 현재 열려있는지 추적
+  bool _isChatPageOpen = false;
+  
+  // 현재 열려있는 채팅방 ID 추적 (null이면 채팅 페이지가 닫혀있거나 목록 화면)
+  String? _currentChatRoomId;
+
   int get totalUnreadCount => _totalUnreadCount;
+  
+  // FCM에서 호출할 수 있도록 public 메서드 추가
+  Future<void> playNotificationSound() async {
+    await _playNotificationSound();
+  }
+  
+  /// FCM 푸시 알림 수신 시 카운트 증가 (즉시 UI 업데이트)
+  void incrementUnreadCount() {
+    final previousCount = _totalUnreadCount;
+    _totalUnreadCount++;
+    notifyListeners();
+  }
+  
+  // 채팅 페이지 열림/닫힘 상태 설정
+  void setChatPageOpen(bool isOpen) {
+    _isChatPageOpen = isOpen;
+    // 채팅 페이지가 닫히면 현재 채팅방 ID도 초기화
+    if (!isOpen) {
+      _currentChatRoomId = null;
+    }
+  }
+  
+  // 채팅 페이지가 열려있는지 확인
+  bool get isChatPageOpen => _isChatPageOpen;
+  
+  // 현재 열려있는 채팅방 ID 설정
+  void setCurrentChatRoomId(String? chatRoomId) {
+    _currentChatRoomId = chatRoomId;
+  }
+  
+  // 현재 열려있는 채팅방 ID 가져오기
+  String? get currentChatRoomId => _currentChatRoomId;
+  
+  // 특정 채팅방이 현재 열려있는지 확인
+  bool isCurrentChatRoom(String chatRoomId) {
+    return _currentChatRoomId == chatRoomId;
+  }
   
   // BuildContext 설정 (스낵바 표시용)
   void setContext(BuildContext context) {
