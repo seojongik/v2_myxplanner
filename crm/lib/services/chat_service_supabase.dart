@@ -9,6 +9,11 @@ import 'supabase_adapter.dart';
 /// Firebase Firestore 대신 Supabase PostgreSQL + Realtime 사용
 class ChatServiceSupabase {
   static SupabaseClient get _supabase => SupabaseAdapter.client;
+  
+  // 스트림 캐시 (중복 호출 방지)
+  static Stream<int>? _cachedUnreadCountStream;
+  static String? _cachedUnreadCountBranchId;
+  static String? _cachedUnreadCountRole;
 
   // 현재 지점 ID 가져오기
   static String? _getCurrentBranchId() {
@@ -451,6 +456,13 @@ class ChatServiceSupabase {
     final currentUserRole = ApiService.getCurrentStaffRole() ?? 'admin';
     final readByKey = currentUserRole == 'pro' ? 'pro' : (currentUserRole == 'manager' ? 'manager' : 'admin');
 
+    // 캐시된 스트림이 있고 같은 branchId, role이면 반환 (중복 호출 방지)
+    if (_cachedUnreadCountStream != null && 
+        _cachedUnreadCountBranchId == branchId && 
+        _cachedUnreadCountRole == readByKey) {
+      return _cachedUnreadCountStream!;
+    }
+
     // 초기 데이터 로드 - read_by 필드를 기반으로 각 역할별 읽지 않은 메시지 계산
     final initialStream = Stream.fromFuture(
       _supabase
@@ -492,12 +504,13 @@ class ChatServiceSupabase {
           }),
     );
 
-    return initialStream.asyncExpand((initialCount) {
+    // 스트림 생성 및 캐시에 저장
+    _cachedUnreadCountStream = initialStream.asyncExpand((initialCount) {
       final changeStream = StreamController<int>();
 
       changeStream.add(initialCount);
 
-      // Realtime 구독 (asyncExpand 내부에서 생성하여 스트림과 함께 관리)
+      // Realtime 구독
       final channel = _supabase
           .channel('chat_rooms_unread_$branchId')
           .onPostgresChanges(
@@ -511,7 +524,6 @@ class ChatServiceSupabase {
             ),
             callback: (payload) async {
               try {
-                // read_by 필드를 기반으로 각 역할별 읽지 않은 메시지 수 재계산
                 final chatRooms = await _supabase
                     .from('chat_rooms')
                     .select('id')
@@ -550,13 +562,20 @@ class ChatServiceSupabase {
           )
           .subscribe();
 
-      // 스트림이 취소될 때 채널 구독 해제
       changeStream.onCancel = () {
         channel.unsubscribe();
+        _cachedUnreadCountStream = null;
+        _cachedUnreadCountBranchId = null;
+        _cachedUnreadCountRole = null;
       };
 
       return changeStream.stream.distinct().debounceTime(const Duration(milliseconds: 300));
-    });
+    }).asBroadcastStream();
+    
+    _cachedUnreadCountBranchId = branchId;
+    _cachedUnreadCountRole = readByKey;
+    
+    return _cachedUnreadCountStream!;
   }
 
   // 새로운 메시지 활동 스트림 (관리자/회원 구분 없이 모든 메시지 활동 감지)

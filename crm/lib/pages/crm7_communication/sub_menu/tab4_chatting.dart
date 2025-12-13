@@ -492,17 +492,9 @@ class _Tab4ChattingWidgetState extends State<Tab4ChattingWidget> {
                 ],
               ),
               Spacer(),
-              // 알림 테스트 버튼
+              // 알림 설정 버튼
               GestureDetector(
-                onTap: () {
-                  ChatNotificationService().simulateNewMessage();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('🔔 알림음 테스트 실행!'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
+                onTap: () => _showNotificationSettingsDialog(context),
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -513,10 +505,10 @@ class _Tab4ChattingWidgetState extends State<Tab4ChattingWidget> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.volume_up, color: Colors.white, size: 14),
+                      Icon(Icons.notifications, color: Colors.white, size: 14),
                       SizedBox(width: 4),
                       Text(
-                        '테스트',
+                        '알림설정',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1539,6 +1531,400 @@ class _Tab4ChattingWidgetState extends State<Tab4ChattingWidget> {
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  // 알림 설정 다이얼로그 표시
+  void _showNotificationSettingsDialog(BuildContext context) {
+    final notificationService = ChatNotificationService();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final selectedRingtone = notificationService.selectedRingtone;
+            final browserNotificationEnabled = notificationService.browserNotificationEnabled;
+            final hasNotificationPermission = notificationService.checkNotificationPermission();
+            
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                width: 400,
+                padding: EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 헤더
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFFFCD00).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.notifications_active,
+                            color: Color(0xFF3C1E1E),
+                            size: 24,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '알림 설정',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                '채팅 알림 설정을 관리합니다',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: Icon(Icons.close, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                    
+                    SizedBox(height: 24),
+                    
+                    // 브라우저 푸시 알림 설정
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.web, color: Color(0xFF3B82F6), size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                '브라우저 푸시 알림',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Spacer(),
+                              // 권한 상태 표시
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: hasNotificationPermission 
+                                      ? Colors.green.withOpacity(0.1) 
+                                      : Colors.orange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  hasNotificationPermission ? '권한 허용됨' : '권한 필요',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: hasNotificationPermission ? Colors.green : Colors.orange,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Switch(
+                                value: browserNotificationEnabled,
+                                onChanged: (value) async {
+                                  if (value) {
+                                    // ON으로 켤 때 항상 권한 확인
+                                    if (!hasNotificationPermission) {
+                                      // 권한 요청 안내 후 요청
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('🔔 브라우저 상단에서 알림 권한을 허용해주세요!'),
+                                          backgroundColor: Colors.blue,
+                                          duration: Duration(seconds: 3),
+                                        ),
+                                      );
+                                      final granted = await notificationService.requestNotificationPermission();
+                                      setDialogState(() {});
+                                      if (granted) {
+                                        notificationService.setBrowserNotificationEnabled(true);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('✅ 브라우저 알림이 활성화되었습니다!'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('⚠️ 브라우저 알림 권한이 거부되었습니다. 브라우저 설정에서 허용해주세요.'),
+                                            backgroundColor: Colors.orange,
+                                            duration: Duration(seconds: 4),
+                                          ),
+                                        );
+                                      }
+                                    } else {
+                                      notificationService.setBrowserNotificationEnabled(true);
+                                      setDialogState(() {});
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('✅ 브라우저 알림이 활성화되었습니다!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    notificationService.setBrowserNotificationEnabled(false);
+                                    setDialogState(() {});
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('🔕 브라우저 알림이 비활성화되었습니다.'),
+                                        backgroundColor: Colors.grey,
+                                      ),
+                                    );
+                                  }
+                                },
+                                activeColor: Color(0xFFFFCD00),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            hasNotificationPermission 
+                                ? (browserNotificationEnabled 
+                                    ? '✅ 새 메시지가 도착하면 브라우저 알림을 받습니다.'
+                                    : '스위치를 켜면 브라우저 알림을 받습니다.')
+                                : '⚠️ 스위치를 켜서 브라우저 알림 권한을 허용해주세요.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: hasNotificationPermission && browserNotificationEnabled 
+                                  ? Colors.green.shade700 
+                                  : Colors.black54,
+                              fontWeight: hasNotificationPermission && browserNotificationEnabled 
+                                  ? FontWeight.w500 
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    SizedBox(height: 16),
+                    
+                    // CRM 하단 알림표시 설정
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.notifications_active, color: Color(0xFFFFCD00), size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'CRM 하단 알림표시',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Spacer(),
+                              Switch(
+                                value: notificationService.snackbarNotificationEnabled,
+                                onChanged: (value) {
+                                  notificationService.setSnackbarNotificationEnabled(value);
+                                  setDialogState(() {});
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(value 
+                                          ? '✅ CRM 하단 알림이 활성화되었습니다!' 
+                                          : '🔕 CRM 하단 알림이 비활성화되었습니다.'),
+                                      backgroundColor: value ? Colors.green : Colors.grey,
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                activeColor: Color(0xFFFFCD00),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            notificationService.snackbarNotificationEnabled
+                                ? '✅ 새 메시지가 도착하면 화면 하단에 알림이 표시됩니다.'
+                                : '화면 하단 알림을 사용하지 않습니다.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: notificationService.snackbarNotificationEnabled 
+                                  ? Colors.green.shade700 
+                                  : Colors.black54,
+                              fontWeight: notificationService.snackbarNotificationEnabled 
+                                  ? FontWeight.w500 
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    SizedBox(height: 16),
+                    
+                    // 벨소리 선택
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.music_note, color: Color(0xFF10B981), size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                '알림 벨소리',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 12),
+                          ...ChatNotificationService.availableRingtones.entries.map((entry) {
+                            final isSelected = selectedRingtone == entry.key;
+                            return InkWell(
+                              onTap: () {
+                                notificationService.setRingtone(entry.key);
+                                setDialogState(() {});
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                margin: EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? Color(0xFFFFCD00).withOpacity(0.2) : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected ? Color(0xFFFFCD00) : Colors.grey.shade300,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                      color: isSelected ? Color(0xFFFFCD00) : Colors.grey.shade400,
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        entry.value,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    // 미리듣기 버튼
+                                    IconButton(
+                                      onPressed: () {
+                                        notificationService.previewRingtone(entry.key);
+                                      },
+                                      icon: Icon(
+                                        Icons.play_circle_outline,
+                                        color: Color(0xFF10B981),
+                                        size: 24,
+                                      ),
+                                      tooltip: '미리듣기',
+                                      padding: EdgeInsets.zero,
+                                      constraints: BoxConstraints(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    ),
+                    
+                    SizedBox(height: 24),
+                    
+                    // 테스트 버튼
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          notificationService.simulateNewMessage();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('🔔 알림 테스트 실행!'),
+                              duration: Duration(seconds: 2),
+                              backgroundColor: Color(0xFF3C1E1E),
+                            ),
+                          );
+                        },
+                        icon: Icon(Icons.volume_up, size: 18),
+                        label: Text('알림 테스트'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFFFFCD00),
+                          foregroundColor: Color(0xFF3C1E1E),
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );

@@ -3,15 +3,15 @@ import 'package:flutter/foundation.dart';
 
 Future initFirebase() async {
   if (kIsWeb) {
+    // autogolfcrm-messaging 프로젝트 (MyXPlanner, crm_lite_pro와 동일)
     await Firebase.initializeApp(
         options: FirebaseOptions(
-            apiKey: "AIzaSyAwsGmHtSWW9LdaO8R0I6wftQPkHtnUy94",
-            authDomain: "mgpfunctions.firebaseapp.com",
-            projectId: "mgpfunctions",
-            storageBucket: "mgpfunctions.firebasestorage.app",
-            messagingSenderId: "224974438083",
-            appId: "1:224974438083:web:bc9f7aa83a1a9a28fcec76",
-            measurementId: "G-FL3NDR09LN"));
+            apiKey: "AIzaSyAkuYPyMcgTJ4FBl8wJ4-ZctIshxAz505M",
+            authDomain: "autogolfcrm-messaging.firebaseapp.com",
+            projectId: "autogolfcrm-messaging",
+            storageBucket: "autogolfcrm-messaging.firebasestorage.app",
+            messagingSenderId: "101436238734",
+            appId: "1:101436238734:web:3a082e5d671e4d39ff92df"));
   } else {
     await Firebase.initializeApp();
   }

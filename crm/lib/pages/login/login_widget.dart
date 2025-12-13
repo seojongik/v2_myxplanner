@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/main.dart';
 import '/services/api_service.dart';
 import '/services/chat_notification_service.dart';
+import '/services/fcm_service.dart';
 import '/services/session_manager.dart';
 import '/services/password_service.dart';
 import '../../constants/font_sizes.dart';
@@ -1064,6 +1065,11 @@ class _LoginWidgetState extends State<LoginWidget> {
       print('🏢 지점 설정 완료: ${branch['branch_id']}');
       print('🔔 채팅 알림 서비스 구독 시작...');
       ChatNotificationService().setupSubscriptions();
+      
+      // FCM 토큰 저장 (푸시 알림용)
+      print('📱 FCM 토큰 저장 시작...');
+      await FCMService.updateTokenAfterLogin();
+      print('✅ FCM 토큰 저장 완료');
 
       // 관리자인 경우 권한을 직접 설정, 아니면 DB 조회
       if (staff['role'] == 'admin' && staff['permissions'] != null) {
@@ -1229,6 +1235,11 @@ class _LoginWidgetState extends State<LoginWidget> {
       print('🏢 지점 설정 완료: ${_model.selectedBranch!['branch_id']}');
       print('🔔 채팅 알림 서비스 구독 시작...');
       ChatNotificationService().setupSubscriptions();
+      
+      // FCM 토큰 저장 (푸시 알림용)
+      print('📱 FCM 토큰 저장 시작...');
+      await FCMService.updateTokenAfterLogin();
+      print('✅ FCM 토큰 저장 완료');
     }
 
     // 직원 권한 정보 조회 및 디버깅 출력

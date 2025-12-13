@@ -188,12 +188,9 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
 
   @override
   void initState(BuildContext context) {
-    print('🔍 [DEBUG] ========== Crm1BoardModel 초기화 시작 ==========');
+    print('📋 [Board] initState() 호출');
     sideBarNavModel = createModel(context, () => SideBarNavModel());
-    print('🔍 [DEBUG] SideBarNavModel 생성 완료');
-    print('🔍 [DEBUG] 게시글 로드 시작...');
     loadPosts();
-    print('🔍 [DEBUG] ========== Crm1BoardModel 초기화 완료 ==========');
   }
 
   @override
@@ -203,12 +200,11 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
     super.dispose();
   }
 
-  // 태그별 캐시 생성 - 한번만 실행 (상세 디버깅 추가)
+  // 태그별 캐시 생성 - 한번만 실행
   void _buildTagCache() {
     if (_cacheInitialized) return;
     
-    print('🔍 [DEBUG] ========== 태그별 캐시 생성 시작 ==========');
-    print('🔍 [DEBUG] 전체 게시글 수: ${_allPosts.length}');
+    print('📋 [Board] _buildTagCache() 시작');
     
     _tagCache.clear();
     _currentPageByTag.clear();
@@ -220,41 +216,26 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
       
       if (tag == '최근글') {
         taggedPosts = _allPosts.where((post) => post.isRecent).toList();
-        print('🔍 [DEBUG] 최근글 태그: ${taggedPosts.length}개 (7일 이내)');
       } else {
         taggedPosts = _allPosts.where((post) => post.boardType == tag).toList();
-        print('🔍 [DEBUG] $tag 태그: ${taggedPosts.length}개');
       }
       
       _tagCache[tag] = taggedPosts;
-      
-      // 각 태그의 첫 페이지 초기화
       _currentPageByTag[tag] = 1;
       _displayedPostsByTag[tag] = [];
     }
     
     _cacheInitialized = true;
-    print('🔍 [DEBUG] 태그별 캐시 생성 완료:');
-    for (var entry in _tagCache.entries) {
-      print('   • ${entry.key}: ${entry.value.length}개');
-    }
-    print('🔍 [DEBUG] ========== 태그별 캐시 생성 종료 ==========');
+    print('📋 [Board] _buildTagCache() 완료 - 전체: ${_allPosts.length}개');
   }
 
-  // 검색어 적용 (캐시된 태그 결과에서 검색) - 페이지네이션 적용 (상세 디버깅 추가)
+  // 검색어 적용 (캐시된 태그 결과에서 검색) - 페이지네이션 적용
   void _applySearchToTaggedPosts() {
-    print('🔍 [DEBUG] ========== 검색 적용 시작 ==========');
-    print('🔍 [DEBUG] 선택된 태그: $_selectedTag');
-    print('🔍 [DEBUG] 검색어: "$_searchQuery"');
-    
     List<BoardPost> taggedPosts = _tagCache[_selectedTag] ?? [];
-    print('🔍 [DEBUG] 태그별 게시글 수: ${taggedPosts.length}개');
-    
     List<BoardPost> searchedPosts;
     
     if (_searchQuery.isEmpty) {
       searchedPosts = taggedPosts;
-      print('🔍 [DEBUG] 검색어 없음 - 전체 게시글 사용');
     } else {
       final searchLower = _searchQuery.toLowerCase();
       searchedPosts = taggedPosts.where((post) {
@@ -263,61 +244,44 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
             post.authorName.toLowerCase().contains(searchLower) ||
             (post.memberName?.toLowerCase().contains(searchLower) ?? false);
       }).toList();
-      print('🔍 [DEBUG] 검색 결과: ${searchedPosts.length}개');
     }
     
     // 페이지네이션 적용
     final currentPage = _currentPageByTag[_selectedTag] ?? 1;
     final endIndex = currentPage * _pageSize;
     
-    print('🔍 [DEBUG] 페이지네이션 정보:');
-    print('   • 현재 페이지: $currentPage');
-    print('   • 페이지 크기: $_pageSize');
-    print('   • 끝 인덱스: $endIndex');
-    
     if (searchedPosts.length <= _pageSize) {
-      // 데이터가 적으면 모두 표시
       _filteredPosts = searchedPosts;
-      print('🔍 [DEBUG] 데이터가 적어 전체 표시: ${_filteredPosts.length}개');
     } else {
-      // 페이지네이션 적용
       _filteredPosts = searchedPosts.take(endIndex).toList();
-      print('🔍 [DEBUG] 페이지네이션 적용: ${_filteredPosts.length}개 표시 (전체: ${searchedPosts.length}개)');
     }
     
     _displayedPostsByTag[_selectedTag] = _filteredPosts;
-    
-    print('🔍 [DEBUG] 최종 필터된 게시글: ${_filteredPosts.length}개');
-    print('🔍 [DEBUG] ========== 검색 적용 종료 ==========');
   }
 
-  // 실제 데이터 로드 (v2_board 구조에 맞게 수정) - 상세 디버깅 추가
+  // 실제 데이터 로드 (v2_board 구조에 맞게 수정)
   Future<void> loadPosts() async {
-    print('🔍 [DEBUG] ========== 게시글 로드 시작 ==========');
+    // 중복 호출 방지
+    if (_isLoading) {
+      print('📋 [Board] loadPosts() 이미 로딩 중 - 스킵');
+      return;
+    }
+    
+    print('📋 [Board] loadPosts() 시작');
     _isLoading = true;
     _errorMessage = null;
-    _cacheInitialized = false; // 캐시 초기화
+    _cacheInitialized = false;
     notifyListeners();
     
     try {
-      // 현재 로그인 정보 확인
       final currentUser = ApiService.getCurrentUser();
       final currentBranchId = ApiService.getCurrentBranchId();
       
-      print('🔍 [DEBUG] 현재 로그인 정보:');
-      print('   • 사용자: $currentUser');
-      print('   • 지점ID: $currentBranchId');
-      
       if (currentBranchId == null) {
-        print('❌ [DEBUG] branch_id가 null입니다!');
         throw Exception('지점 정보가 없습니다.');
       }
       
-      // 1. v2_board 데이터 먼저 모두 가져오기 (branch_id만으로)
-      print('🔍 [DEBUG] 게시글 데이터 요청 시작...');
-      print('   • 테이블: v2_board_by_member');
-      print('   • branch_id: $currentBranchId');
-      
+      // 1. v2_board 데이터 가져오기
       final boardData = await ApiService.getBoardByMemberData(
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': currentBranchId}
@@ -327,21 +291,16 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
         ],
       );
       
-      print('🔍 [DEBUG] 게시글 데이터 응답:');
-      print('   • 데이터 개수: ${boardData.length}');
-      if (boardData.isNotEmpty) {
-        print('   • 첫 번째 게시글: ${boardData[0]}');
-      }
+      print('📋 [Board] 게시글: ${boardData.length}개');
       
       if (boardData.isEmpty) {
-        print('⚠️ [DEBUG] 게시글 데이터가 비어있습니다.');
         _allPosts = [];
         _tagCache.clear();
         _filteredPosts = [];
         return;
       }
       
-      // 2. 필요한 ID들 추출 (member_id만 필요)
+      // 2. 필요한 ID들 추출
       final memberIds = <int>{};
       final boardIds = <int>{};
       
@@ -354,21 +313,16 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
         }
       }
       
-      print('🔍 [DEBUG] 추출된 ID들:');
-      print('   • member_ids: $memberIds');
-      print('   • board_ids: $boardIds');
-      
-      // 3. Member 데이터 한번에 가져오기 (member_id가 있는 경우만)
+      // 3. Member 데이터 가져오기
       Map<int, Map<String, dynamic>> memberMap = {};
       if (memberIds.isNotEmpty) {
-        print('🔍 [DEBUG] 회원 데이터 요청 시작...');
         try {
           final memberData = await ApiService.getMemberData(
             where: [
               {'field': 'member_id', 'operator': 'IN', 'value': memberIds.toList()}
             ],
           );
-          print('🔍 [DEBUG] 회원 데이터 응답: ${memberData.length}개');
+          print('📋 [Board] 회원: ${memberData.length}개');
           
           for (var member in memberData) {
             if (member['member_id'] != null) {
@@ -376,18 +330,14 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
             }
           }
         } catch (e) {
-          print('❌ [DEBUG] Member 데이터 로드 오류: $e');
+          print('❌ [Board] Member 로드 오류: $e');
         }
       }
       
-      // 4. v2_board_comment 데이터 한번에 가져오기 (branch_id만으로)
+      // 4. 댓글 데이터 가져오기
       Map<int, List<Map<String, dynamic>>> commentMap = {};
       Map<int, int> commentCountMap = {};
       if (boardIds.isNotEmpty) {
-        print('🔍 [DEBUG] 댓글 데이터 요청 시작...');
-        print('   • 테이블: v2_board_by_member_replies');
-        print('   • branch_id: $currentBranchId');
-        
         try {
           final commentData = await ApiService.getBoardRepliesData(
             where: [
@@ -399,12 +349,8 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
             ],
           );
           
-          print('🔍 [DEBUG] 댓글 데이터 응답: ${commentData.length}개');
-          if (commentData.isNotEmpty) {
-            print('   • 첫 번째 댓글: ${commentData[0]}');
-          }
+          print('📋 [Board] 댓글: ${commentData.length}개');
           
-          // Comment를 board_id별로 그룹화
           for (var comment in commentData) {
             final boardId = comment['board_id'];
             if (boardId != null) {
@@ -416,31 +362,22 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
               commentCountMap[boardId] = commentCountMap[boardId]! + 1;
             }
           }
-          
-          print('🔍 [DEBUG] 댓글 그룹화 완료:');
-          print('   • 댓글이 있는 게시글 수: ${commentMap.length}');
-          for (var entry in commentMap.entries) {
-            print('   • 게시글 ${entry.key}: ${entry.value.length}개 댓글');
-          }
         } catch (e) {
-          print('❌ [DEBUG] Comment 데이터 로드 오류: $e');
+          print('❌ [Board] Comment 로드 오류: $e');
         }
       }
       
-      // 5. BoardPost 객체들 생성 (모든 데이터 조합)
-      print('🔍 [DEBUG] BoardPost 객체 생성 시작...');
+      // 5. BoardPost 객체들 생성
       List<BoardPost> posts = [];
       for (var boardJson in boardData) {
         final memberId = boardJson['member_id'];
         final boardId = boardJson['board_id'];
         
-        // Member 정보 조합
         String? memberName;
         if (memberId != null && memberId != 0 && memberMap.containsKey(memberId)) {
           memberName = memberMap[memberId]!['member_name'];
         }
         
-        // Comment 정보 조합
         final comments = commentMap[boardId] ?? [];
         final commentCount = commentCountMap[boardId] ?? 0;
         
@@ -448,7 +385,7 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
           boardId: boardJson['board_id'] ?? 0,
           title: boardJson['title'] ?? '',
           content: boardJson['content'] ?? '',
-          memberId: memberId == 0 ? null : memberId, // 0이면 null로 처리
+          memberId: memberId == 0 ? null : memberId,
           memberName: memberName,
           createdAt: DateTime.tryParse(boardJson['created_at'] ?? '') ?? DateTime.now(),
           updatedAt: DateTime.tryParse(boardJson['updated_at'] ?? '') ?? DateTime.now(),
@@ -466,29 +403,17 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
       }
       
       _allPosts = posts;
-      print('🔍 [DEBUG] 전체 게시글 수: ${_allPosts.length}');
-      
-      // 태그별 캐시 생성
-      print('🔍 [DEBUG] 태그별 캐시 생성 시작...');
       _buildTagCache();
-      
-      // 현재 선택된 태그에 맞는 결과 적용
-      print('🔍 [DEBUG] 현재 태그 적용: $_selectedTag');
       _applySearchToTaggedPosts();
       
-      print('✅ [DEBUG] 게시글 로드 완료!');
-      print('   • 전체 게시글: ${_allPosts.length}개');
-      print('   • 필터된 게시글: ${_filteredPosts.length}개');
-      print('   • 현재 태그: $_selectedTag');
+      print('✅ [Board] loadPosts() 완료 - ${_allPosts.length}개');
       
     } catch (e) {
       _errorMessage = e.toString();
-      print('❌ [DEBUG] 게시글 로드 오류: $e');
-      print('❌ [DEBUG] 스택 트레이스: ${StackTrace.current}');
+      print('❌ [Board] loadPosts() 오류: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
-      print('🔍 [DEBUG] ========== 게시글 로드 종료 ==========');
     }
   }
 
@@ -501,47 +426,30 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
 
   void onSearchSubmitted(String query) {
     _searchQuery = query;
-    _applySearchToTaggedPosts(); // 캐시된 태그 결과에서 검색
+    _applySearchToTaggedPosts();
     notifyListeners();
-    print('검색 실행: $query');
   }
 
-  // 태그 선택 (한번에 하나만 선택 가능) - 즉시 반응 (상세 디버깅 추가)
+  // 태그 선택 (한번에 하나만 선택 가능)
   void onTagSelected(List<String> selectedTags) {
-    print('🔍 [DEBUG] ========== 태그 선택 시작 ==========');
-    print('🔍 [DEBUG] 선택된 태그들: $selectedTags');
-    print('🔍 [DEBUG] 이전 선택된 태그: $_selectedTag');
-    
-    // 한번에 하나의 태그만 선택 가능
     if (selectedTags.isNotEmpty) {
       _selectedTag = selectedTags.last;
     } else {
-      _selectedTag = '최근글'; // 기본값
+      _selectedTag = '최근글';
     }
     
-    print('🔍 [DEBUG] 새로운 선택된 태그: $_selectedTag');
-    
-    // 해당 태그의 페이지를 1로 리셋
     _currentPageByTag[_selectedTag] = 1;
-    print('🔍 [DEBUG] 페이지 리셋: $_selectedTag -> 1페이지');
-    
-    // 캐시에서 즉시 결과 가져오기
     _applySearchToTaggedPosts();
     notifyListeners();
-    
-    print('🔍 [DEBUG] 태그 선택 완료: $_selectedTag (캐시에서 ${_filteredPosts.length}개 게시글 로드, 전체: ${totalPostsForCurrentTag}개)');
-    print('🔍 [DEBUG] ========== 태그 선택 종료 ==========');
   }
 
   // 게시글 작성 버튼 클릭
   void onCreatePostPressed() {
-    print('게시글 작성 버튼 클릭됨');
     // TODO: 게시글 작성 다이얼로그 또는 페이지 열기
   }
 
   // 게시글 클릭
   void onPostTapped(BoardPost post) {
-    print('게시글 클릭: ${post.title}');
     // TODO: 게시글 상세 페이지로 네비게이션
   }
 
@@ -556,7 +464,6 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
       _isLoading = true;
       notifyListeners();
       
-      // 현재 로그인 사용자 정보 가져오기
       final currentUser = ApiService.getCurrentUser();
       final currentBranchId = ApiService.getCurrentBranchId();
       
@@ -564,20 +471,14 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
         throw Exception('로그인 정보가 없습니다.');
       }
       
-      print('🔍 [DEBUG] 게시글 작성 시작');
-      print('   • 현재 사용자: $currentUser');
-      print('   • 현재 지점: $currentBranchId');
-      print('   • 제목: $title');
-      print('   • 내용: $content');
-      print('   • 타입: $boardType');
-      print('   • 회원ID: $memberId');
+      print('📋 [Board] createPost() 시작');
       
       final data = {
         'title': title,
         'content': content,
         'board_type': boardType,
-        'member_id': memberId ?? 0, // 개발용으로 0 설정
-        'member_name': memberId != null ? '회원' : '개발자', // 개발용으로 '개발자' 설정
+        'member_id': memberId ?? 0,
+        'member_name': memberId != null ? '회원' : '개발자',
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
         'branch_id': currentBranchId,
@@ -587,18 +488,12 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
         'pro_name': currentUser['pro_name'],
       };
       
-      print('🔍 [DEBUG] 전송할 데이터: $data');
-      
       final result = await ApiService.addBoardByMemberData(data);
       
-      print('🔍 [DEBUG] 게시글 생성 결과: $result');
-      
-      // 새로 생성된 게시글 ID 가져오기 (API 응답에서)
       int? newBoardId;
       if (result is Map<String, dynamic> && result['board_id'] != null) {
         newBoardId = result['board_id'];
       } else {
-        // ID를 직접 받을 수 없는 경우 최신 게시글을 다시 조회
         final latestBoard = await ApiService.getBoardByMemberData(
           orderBy: [{'field': 'created_at', 'direction': 'DESC'}],
           limit: 1,
@@ -609,7 +504,6 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
       }
       
       if (newBoardId != null) {
-        // Member 정보 가져오기 (필요한 경우)
         String? memberName;
         if (memberId != null && memberId != 0) {
           try {
@@ -621,11 +515,10 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
               memberName = memberData[0]['member_name'];
             }
           } catch (e) {
-            print('Member 정보 로드 오류: $e');
+            print('❌ [Board] Member 정보 로드 오류: $e');
           }
         }
         
-        // 새 게시글 객체 생성
         final newPost = BoardPost(
           boardId: newBoardId,
           title: title,
@@ -644,29 +537,20 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
           comments: [],
         );
         
-        print('🔍 [DEBUG] 새 게시글 객체 생성 완료: ${newPost.title}');
-        
-        // 기존 목록 맨 앞에 추가
         _allPosts.insert(0, newPost);
-        
-        // 캐시 재생성
         _cacheInitialized = false;
         _buildTagCache();
-        
-        // 현재 선택된 태그에 맞는 결과 적용
         _applySearchToTaggedPosts();
         
-        print('✅ [DEBUG] 게시글 생성 성공');
+        print('✅ [Board] createPost() 완료');
       } else {
-        // ID를 가져올 수 없는 경우에만 전체 새로고침
-        print('⚠️ [DEBUG] 게시글 ID를 가져올 수 없어 전체 새로고침 실행');
         await loadPosts();
       }
       
       return true;
     } catch (e) {
       _errorMessage = e.toString();
-      print('❌ [DEBUG] 게시글 생성 오류: $e');
+      print('❌ [Board] createPost() 오류: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -680,35 +564,27 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
       _isLoading = true;
       notifyListeners();
 
-      print('🔍 [DEBUG] 게시글 삭제 시작: ID $boardId');
+      print('📋 [Board] deletePost() ID: $boardId');
 
-      // API를 통해 게시글 삭제
       await ApiService.deleteBoardByMemberData([
         {'field': 'board_id', 'operator': '=', 'value': boardId}
       ]);
 
-      print('🔍 [DEBUG] 게시글 삭제 API 호출 완료');
-
-      // 로컬 데이터에서도 제거
       _allPosts.removeWhere((post) => post.boardId == boardId);
-      
-      // 캐시 재생성
       _cacheInitialized = false;
       _buildTagCache();
-      
-      // 현재 선택된 태그에 맞는 결과 적용
       _applySearchToTaggedPosts();
       
       _isLoading = false;
       notifyListeners();
       
-      print('✅ [DEBUG] 게시글 삭제 성공: ID $boardId');
+      print('✅ [Board] deletePost() 완료');
       return true;
     } catch (e) {
       _isLoading = false;
       _errorMessage = '게시글 삭제 중 오류가 발생했습니다: $e';
       notifyListeners();
-      print('❌ [DEBUG] 게시글 삭제 오류: $e');
+      print('❌ [Board] deletePost() 오류: $e');
       return false;
     }
   }
@@ -761,7 +637,5 @@ class Crm1BoardModel extends FlutterFlowModel<Crm1BoardWidget> with ChangeNotifi
     
     _applySearchToTaggedPosts();
     notifyListeners();
-    
-    print('더 많은 게시글 로드: 페이지 ${_currentPageByTag[_selectedTag]}, 표시 중: ${_filteredPosts.length}개');
   }
 }

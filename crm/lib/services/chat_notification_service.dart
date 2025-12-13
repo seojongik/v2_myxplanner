@@ -23,6 +23,10 @@ class ChatNotificationService extends ChangeNotifier {
   bool _isInitialized = false;
   BuildContext? _currentContext;
   
+  // 중복 구독 방지
+  String? _subscribedBranchId;
+  bool _isSettingUpSubscriptions = false;
+  
   // 최신 메시지 정보 캐시
   Map<String, dynamic>? _latestMessageInfo;
 
@@ -31,8 +35,187 @@ class ChatNotificationService extends ChangeNotifier {
   
   // 현재 열려있는 채팅방 ID 추적 (null이면 채팅 페이지가 닫혀있거나 목록 화면)
   String? _currentChatRoomId;
+  
+  // 벨소리 설정
+  String _selectedRingtone = 'dingdong'; // 기본값: 딩동
+  bool _browserNotificationEnabled = false;
+  bool _snackbarNotificationEnabled = true; // CRM 하단 알림표시 (기본: ON)
+  
+  // 사용 가능한 벨소리 목록
+  static const Map<String, String> availableRingtones = {
+    'dingdong': '기본 딩동',
+    'hole_in': '홀인원 축하',
+    'iron': '아이언샷',
+  };
+  
+  String get selectedRingtone => _selectedRingtone;
+  bool get browserNotificationEnabled => _browserNotificationEnabled;
+  bool get snackbarNotificationEnabled => _snackbarNotificationEnabled;
 
   int get totalUnreadCount => _totalUnreadCount;
+  
+  // 벨소리 설정 변경
+  void setRingtone(String ringtone) {
+    if (availableRingtones.containsKey(ringtone)) {
+      _selectedRingtone = ringtone;
+      notifyListeners();
+      print('🔔 벨소리 변경: $ringtone');
+    }
+  }
+  
+  // 브라우저 알림 설정 변경
+  void setBrowserNotificationEnabled(bool enabled) {
+    _browserNotificationEnabled = enabled;
+    notifyListeners();
+    print('🔔 브라우저 알림: ${enabled ? '활성화' : '비활성화'}');
+  }
+  
+  // CRM 하단 알림(스낵바) 설정 변경
+  void setSnackbarNotificationEnabled(bool enabled) {
+    _snackbarNotificationEnabled = enabled;
+    notifyListeners();
+    print('🔔 CRM 하단 알림: ${enabled ? '활성화' : '비활성화'}');
+  }
+  
+  // 브라우저 알림 권한 요청
+  Future<bool> requestNotificationPermission() async {
+    if (!kIsWeb) {
+      print('❌ 웹이 아니므로 알림 권한 요청 불가');
+      return false;
+    }
+    
+    try {
+      print('🔔 브라우저 알림 권한 요청 시작...');
+      print('🔔 현재 권한 상태: ${html.Notification.permission}');
+      
+      // 이미 권한이 있으면 바로 반환
+      if (html.Notification.permission == 'granted') {
+        print('✅ 이미 알림 권한이 허용되어 있습니다');
+        _browserNotificationEnabled = true;
+        notifyListeners();
+        return true;
+      }
+      
+      // 권한이 거부된 상태면 브라우저 설정에서 변경해야 함
+      if (html.Notification.permission == 'denied') {
+        print('⚠️ 알림 권한이 거부되어 있습니다. 브라우저 설정에서 변경 필요');
+        return false;
+      }
+      
+      // 권한 요청 (default 상태일 때만 팝업이 뜸)
+      print('🔔 브라우저에 권한 요청 팝업 표시 중...');
+      final permission = await html.Notification.requestPermission();
+      final granted = permission == 'granted';
+      
+      if (granted) {
+        _browserNotificationEnabled = true;
+      }
+      notifyListeners();
+      print('🔔 알림 권한 요청 결과: $permission (granted: $granted)');
+      return granted;
+    } catch (e) {
+      print('❌ 알림 권한 요청 실패: $e');
+      return false;
+    }
+  }
+  
+  // 브라우저 알림 권한 상태 확인
+  bool checkNotificationPermission() {
+    if (!kIsWeb) return false;
+    try {
+      final permission = html.Notification.permission;
+      print('🔍 현재 브라우저 알림 권한 상태: $permission');
+      return permission == 'granted';
+    } catch (e) {
+      print('❌ 권한 상태 확인 실패: $e');
+      return false;
+    }
+  }
+  
+  // 브라우저 푸시 알림 표시
+  void showBrowserNotification(String title, String body) {
+    if (!kIsWeb || !_browserNotificationEnabled) return;
+    
+    try {
+      if (html.Notification.permission == 'granted') {
+        html.Notification(title, body: body, icon: 'icons/Icon-192.png');
+        print('🔔 브라우저 알림 표시: $title');
+      }
+    } catch (e) {
+      print('❌ 브라우저 알림 표시 실패: $e');
+    }
+  }
+  
+  // CRM 하단 알림(스낵바) 표시
+  void showSnackbarNotification(String title, String body) {
+    if (!_snackbarNotificationEnabled || _currentContext == null) return;
+    
+    try {
+      ScaffoldMessenger.of(_currentContext!).showSnackBar(
+        SnackBar(
+          content: Container(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.message_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (body.isNotEmpty) ...[
+                        SizedBox(height: 2),
+                        Text(
+                          body,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 8,
+        ),
+      );
+      print('✅ CRM 하단 알림 표시: $title');
+    } catch (e) {
+      print('❌ CRM 하단 알림 표시 실패: $e');
+    }
+  }
   
   // FCM에서 호출할 수 있도록 public 메서드 추가
   Future<void> playNotificationSound() async {
@@ -120,70 +303,57 @@ class ChatNotificationService extends ChangeNotifier {
   
   void setupSubscriptions() {
     final branchId = ApiService.getCurrentBranchId();
-    print('🔍 [알림] 구독 설정 시작 - branchId: $branchId');
     
     if (branchId == null) {
-      print('⚠️ [알림] branchId가 여전히 null - 구독 설정 건너뜀');
+      print('⚠️ [알림] branchId가 null - 구독 설정 건너뜀');
       return;
     }
+    
+    // 이미 같은 branchId로 구독 중이면 스킵
+    if (_subscribedBranchId == branchId) {
+      print('⚠️ [알림] 이미 구독 중 - 스킵 ($branchId)');
+      return;
+    }
+    
+    // 중복 호출 방지
+    if (_isSettingUpSubscriptions) {
+      print('⚠️ [알림] 구독 설정 진행 중 - 스킵');
+      return;
+    }
+    
+    _isSettingUpSubscriptions = true;
+    print('🔔 [알림] 구독 설정 시작 - branchId: $branchId');
     
     // 기존 구독이 있다면 취소
     _unreadCountSubscription?.cancel();
     _messageActivitySubscription?.cancel();
     _latestMessageInfoSubscription?.cancel();
     
-    // 읽지 않은 메시지 카운트 구독
+    // 읽지 않은 메시지 카운트 구독 (카운트만 업데이트, 알림은 FCM에서 처리)
     _unreadCountSubscription = ChatServiceSupabase.getUnreadMessageCountStream().listen((count) {
       int previousCount = _totalUnreadCount;
       _totalUnreadCount = count;
       
       print('🔍 [알림] 카운트 변화: $previousCount → $count');
       
-      // 새 메시지가 도착했을 때만 알림음 재생 (조건 완화)
-      if (count > previousCount) {
-        print('🚨 [알림] 새 메시지 감지! 알림 처리 시작...');
-        
-        // 최신 메시지 정보 캐시 업데이트를 위해 잠깐 대기 후 알림음과 스낵바 함께 표시
-        Timer(Duration(milliseconds: 500), () {
-          _playNotificationSound();
-          _showMessageNotification();
-        });
-      } else {
-        print('📊 [알림] 카운트 증가 없음 - 알림 없음');
-      }
+      // 알림음/스낵바는 FCM에서 처리 (회원 메시지에만 서버에서 FCM 발송)
+      // 여기서는 카운트만 업데이트
       
       notifyListeners();
     });
     
-    // 새로운 메시지 활동 감지 (관리자/회원 구분 없이)
+    // 메시지 활동 스트림 (타임스탬프 추적용, 알림은 FCM에서 처리)
     try {
       print('🔧 [알림] 메시지 활동 스트림 구독 시작...');
       _messageActivitySubscription = ChatServiceSupabase.getMessageActivityStream().listen(
         (timestamp) {
-          print('🔍 [알림] 메시지 활동 감지: 이전 타임스탬프=$_lastMessageTimestamp, 현재=$timestamp');
-          
-          if (timestamp > _lastMessageTimestamp && _lastMessageTimestamp > 0) {
-            print('🚨 [알림] 새로운 메시지 활동! 알림 처리 시작...');
-            
-            // 최신 메시지 정보 캐시 업데이트를 위해 잠깐 대기 후 알림음과 스낵바 함께 표시
-            Timer(Duration(milliseconds: 500), () {
-              _playNotificationSound();
-              _showMessageNotification();
-            });
-          } else if (_lastMessageTimestamp == 0) {
-            print('📊 [알림] 첫 번째 메시지 활동 기록 (알림 없음)');
-          } else {
-            print('📊 [알림] 메시지 활동 없음 또는 이전 메시지');
-          }
-          
+          // 알림음/스낵바는 FCM에서 처리 (회원 메시지에만 서버에서 FCM 발송)
+          // 여기서는 타임스탬프만 추적
           _lastMessageTimestamp = timestamp;
         },
         onError: (error) {
           print('❌ [알림] 메시지 활동 스트림 에러: $error');
         },
-        onDone: () {
-          print('✅ [알림] 메시지 활동 스트림 완료');
-        }
       );
       print('✅ [알림] 메시지 활동 스트림 구독 완료');
     } catch (e) {
@@ -212,11 +382,13 @@ class ChatNotificationService extends ChangeNotifier {
       print('❌ [알림] 최신 메시지 정보 스트림 구독 실패: $e');
     }
     
-    print('✅ [알림] 구독 설정 완료');
+    _subscribedBranchId = branchId;
+    _isSettingUpSubscriptions = false;
+    print('✅ [알림] 구독 설정 완료 - $branchId');
   }
 
   Future<void> _playNotificationSound() async {
-    print('🔔 알림음 재생 시도... (초기화됨: $_isInitialized)');
+    print('🔔 알림음 재생 시도... (초기화됨: $_isInitialized, 벨소리: $_selectedRingtone)');
     
     if (!_isInitialized || _audioPlayer == null) {
       print('⚠️ AudioPlayer가 초기화되지 않음');
@@ -239,9 +411,17 @@ class ChatNotificationService extends ChangeNotifier {
         await _audioPlayer!.setVolume(1.0); // 최대 볼륨
         await _audioPlayer!.setPlayerMode(PlayerMode.lowLatency); // 낮은 지연시간 모드
         
+        // 선택된 벨소리에 따라 파일 선택
+        String soundFile = 'sounds/dingdong.mp3';
+        if (_selectedRingtone == 'hole_in') {
+          soundFile = 'sounds/hole_in.mp3';
+        } else if (_selectedRingtone == 'iron') {
+          soundFile = 'sounds/iron.mp3';
+        }
+        
         // MP3 파일 재생
-        await _audioPlayer!.play(AssetSource('sounds/dingdong.mp3'));
-        print('🔔 AudioPlayer로 딩동 소리 재생 (MP3, 볼륨: 1.0)');
+        await _audioPlayer!.play(AssetSource(soundFile));
+        print('🔔 AudioPlayer로 소리 재생 ($soundFile, 볼륨: 1.0)');
         return;
       } catch (e) {
         print('❌ MP3 재생 실패, 시스템 알림음으로 대체: $e');
@@ -270,10 +450,35 @@ class ChatNotificationService extends ChangeNotifier {
 
   void _playWebNotification() {
     try {
-      print('🌐 웹: 딩동 알림 시작');
+      print('🌐 웹: 알림 시작 (벨소리: $_selectedRingtone)');
       
-      // JavaScript 함수를 동적으로 생성해서 실행
-      bool success = _createInlineDingDongSound();
+      bool success = false;
+      
+      // 선택된 벨소리에 따라 MP3 파일 재생 또는 기본 딩동
+      if (_selectedRingtone == 'hole_in' || _selectedRingtone == 'iron') {
+        // MP3 파일 재생
+        try {
+          final audio = html.AudioElement();
+          audio.src = '${_selectedRingtone}.mp3';
+          audio.volume = 1.0;
+          audio.play().then((_) {
+            print('🔔 MP3 벨소리 재생: ${_selectedRingtone}.mp3');
+            success = true;
+          }).catchError((e) {
+            print('⚠️ MP3 재생 실패: $e');
+            // 실패 시 기본 딩동 재생
+            _createInlineDingDongSound();
+          });
+          success = true;
+        } catch (e) {
+          print('⚠️ Audio Element 생성 실패: $e');
+        }
+      }
+      
+      if (!success) {
+        // 기본 딩동 소리 (JavaScript 생성)
+        success = _createInlineDingDongSound();
+      }
       
       if (!success) {
         // 백업: 기존 beep 소리
@@ -292,7 +497,7 @@ class ChatNotificationService extends ChangeNotifier {
       }
       
       // 콘솔 알림은 항상 실행
-      html.window.console.log('🔔 DING DONG! 새 메시지가 도착했습니다!');
+      html.window.console.log('🔔 새 메시지가 도착했습니다!');
       
     } catch (e) {
       print('❌ 웹 알림 전체 실패: $e');
@@ -375,19 +580,18 @@ class ChatNotificationService extends ChangeNotifier {
       final messagePreview = latestMessageInfo['message'] ?? '새 메시지';
       final senderType = latestMessageInfo['senderType'] ?? 'unknown';
       
-      String notificationText;
-      IconData notificationIcon;
-      Color backgroundColor;
-      
-      if (senderType == 'member') {
-        notificationText = '$memberName님으로부터 1:1 메시지가 수신되었습니다!';
-        notificationIcon = Icons.message_rounded;
-        backgroundColor = Color(0xFF4CAF50); // 초록색
-      } else {
-        notificationText = '새로운 메시지가 전송되었습니다!';
-        notificationIcon = Icons.send_rounded;
-        backgroundColor = Color(0xFF2196F3); // 파란색
+      // 회원이 보낸 메시지에만 알림 표시 (관리자가 보낸 메시지는 무시)
+      if (senderType != 'member') {
+        print('📤 [알림] 관리자/프로가 보낸 메시지 - 알림 생략');
+        return;
       }
+      
+      // 회원 메시지일 때만 알림음 재생
+      await _playNotificationSound();
+      
+      String notificationText = '$memberName님으로부터 1:1 메시지가 수신되었습니다!';
+      IconData notificationIcon = Icons.message_rounded;
+      Color backgroundColor = Color(0xFF4CAF50); // 초록색
       
       // 애니메이션이 있는 커스텀 스낵바 표시
       ScaffoldMessenger.of(_currentContext!).showSnackBar(
@@ -465,6 +669,14 @@ class ChatNotificationService extends ChangeNotifier {
       
       print('✅ [알림] 메시지 알림 스낵바 표시: $notificationText');
       
+      // 브라우저 푸시 알림도 함께 표시
+      if (_browserNotificationEnabled) {
+        showBrowserNotification(
+          senderType == 'member' ? '새 메시지' : '메시지 전송',
+          notificationText,
+        );
+      }
+      
     } catch (e) {
       print('❌ [알림] 스낵바 표시 실패: $e');
     }
@@ -534,8 +746,42 @@ class ChatNotificationService extends ChangeNotifier {
 
   // 수동으로 알림음 테스트
   Future<void> testNotificationSound() async {
-    print('🧪 알림음 테스트 시작');
+    print('🧪 알림음 테스트 시작 (현재 벨소리: $_selectedRingtone)');
     await _playNotificationSound();
+  }
+  
+  // 특정 벨소리 미리듣기 (설정 변경 없이)
+  Future<void> previewRingtone(String ringtone) async {
+    print('🎵 벨소리 미리듣기: $ringtone');
+    
+    if (kIsWeb) {
+      // 웹에서 MP3 파일 재생
+      if (ringtone == 'hole_in' || ringtone == 'iron') {
+        try {
+          final audio = html.AudioElement();
+          audio.src = '${ringtone}.mp3';
+          audio.volume = 1.0;
+          await audio.play();
+          print('🔔 MP3 미리듣기: ${ringtone}.mp3');
+        } catch (e) {
+          print('❌ MP3 미리듣기 실패: $e');
+        }
+      } else {
+        // 기본 딩동
+        _createInlineDingDongSound();
+      }
+    } else {
+      // 모바일
+      if (_audioPlayer != null) {
+        String soundFile = 'sounds/dingdong.mp3';
+        if (ringtone == 'hole_in') {
+          soundFile = 'sounds/hole_in.mp3';
+        } else if (ringtone == 'iron') {
+          soundFile = 'sounds/iron.mp3';
+        }
+        await _audioPlayer!.play(AssetSource(soundFile));
+      }
+    }
   }
   
   // 특정 딩동 소리 테스트
@@ -567,19 +813,29 @@ class ChatNotificationService extends ChangeNotifier {
     }
   }
   
-  // 새 메시지 시뮬레이션 (카운트 증가로 알림 테스트)
-  void simulateNewMessage() {
+  // 새 메시지 시뮬레이션 (테스트 버튼용)
+  Future<void> simulateNewMessage() async {
     print('🎭 새 메시지 시뮬레이션 시작');
     int currentCount = _totalUnreadCount;
-    
+
     // 카운트를 1 증가시켜서 새 메시지 도착 시뮬레이션
     _totalUnreadCount = currentCount + 1;
+
+    print('🚨 테스트 알림! 이전: $currentCount, 현재: $_totalUnreadCount');
     
-    print('🚨 새 메시지 감지! 이전: $currentCount, 현재: $_totalUnreadCount');
-    _playNotificationSound();
+    // 알림음 재생
+    await _playNotificationSound();
     
+    // 브라우저 푸시 알림 표시 (설정된 경우)
+    if (kIsWeb && _browserNotificationEnabled) {
+      showBrowserNotification(
+        '테스트 알림',
+        '🔔 알림 테스트가 정상적으로 작동합니다!',
+      );
+    }
+
     notifyListeners();
-    
+
     // 3초 후 원복
     Timer(Duration(seconds: 3), () {
       _totalUnreadCount = currentCount;

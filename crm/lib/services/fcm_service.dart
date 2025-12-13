@@ -246,7 +246,21 @@ class FCMService {
                              !notificationService.isCurrentChatRoom(messageChatRoomId));
     
     if (shouldPlaySound) {
+      // 알림음 재생
       await notificationService.playNotificationSound();
+      
+      // 브라우저 푸시 알림 표시 (웹에서 설정된 경우)
+      if (kIsWeb && notificationService.browserNotificationEnabled) {
+        notificationService.showBrowserNotification(
+          title,
+          body,
+        );
+      }
+      
+      // CRM 하단 알림(스낵바) 표시 (설정된 경우)
+      if (notificationService.snackbarNotificationEnabled) {
+        notificationService.showSnackbarNotification(title, body);
+      }
       
       // 하단 네비 카운트 즉시 증가 (UI 업데이트)
       notificationService.incrementUnreadCount();
@@ -324,25 +338,22 @@ class FCMService {
       
       // branch_id가 없으면 저장하지 않음 (로그인 전이거나 branch_id 미설정)
       if (branchId == null) {
+        print('⚠️ [FCM] 토큰 저장 스킵 - branchId가 null');
         return;
       }
       
       final supabase = SupabaseAdapter.client;
       
       // 현재 사용자의 역할 확인 (admin, manager)
-      // crm은 관리자/매니저만 사용 (프로는 crm_lite_pro 사용)
       final role = ApiService.getCurrentStaffRole() ?? 'admin';
-      final senderType = role; // 'admin', 'manager'
-      
-      // branch_id 기준으로 토큰 저장 (개인 계정이 아닌 branch_id별 계정)
-      // 같은 branch_id의 같은 역할이면 하나의 토큰으로 관리
-      // 여러 관리자/매니저가 같은 branch_id에서 사용할 수 있으므로
-      // tokenId는 branch_id + sender_type 조합으로 생성
+      final senderType = role;
       final tokenId = '${branchId}_${senderType}';
+      
+      print('📱 [FCM] 토큰 저장 중... tokenId: $tokenId');
       
       final data = {
         'id': tokenId,
-        'branch_id': branchId, // 중요: 이 branch_id로만 알림이 발송됨
+        'branch_id': branchId,
         'member_id': currentUser?['member_id']?.toString() ?? 
                      currentUser?['admin_id']?.toString() ?? 
                      currentUser?['staff_access_id']?.toString() ??
@@ -355,8 +366,10 @@ class FCMService {
       };
       
       await supabase.from('fcm_tokens').upsert(data);
+      print('✅ [FCM] 토큰 저장 성공 - $tokenId');
       
     } catch (e, stackTrace) {
+      print('❌ [FCM] 토큰 저장 오류: $e');
     }
   }
   
@@ -370,22 +383,29 @@ class FCMService {
   // 이 메서드를 호출하지 않으면 토큰이 저장되지 않아 푸시 알림을 받을 수 없음
   static Future<void> updateTokenAfterLogin() async {
     try {
+      print('📱 [FCM] updateTokenAfterLogin() 호출');
+      
       if (_messaging == null) {
+        print('⚠️ [FCM] messaging이 null - 토큰 저장 스킵');
         return;
       }
       
       final branchId = ApiService.getCurrentBranchId();
       if (branchId == null) {
-        // branch_id가 없으면 토큰 저장하지 않음
+        print('⚠️ [FCM] branchId가 null - 토큰 저장 스킵');
         return;
       }
       
       final token = await _messaging!.getToken();
       if (token != null) {
+        print('📱 [FCM] 토큰 획득 성공: ${token.substring(0, 20)}...');
         _currentToken = token;
         await _updateTokenInSupabase(token);
+      } else {
+        print('⚠️ [FCM] 토큰 획득 실패');
       }
     } catch (e) {
+      print('❌ [FCM] updateTokenAfterLogin() 오류: $e');
     }
   }
   
