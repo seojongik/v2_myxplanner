@@ -201,27 +201,26 @@ def main():
 
     print_step(f"Subtree push 중 ({REMOTE_NAME}/{BRANCH}) - 강제 push (로컬 우선)")
     try:
-        # subtree split으로 분리
-        split_output, _ = run_command(
-            ['git', 'subtree', 'split', '--prefix', FOLDER_PREFIX, '--rejoin'],
+        subtree_branch = f'subtree-{FOLDER_PREFIX}'
+        
+        # 기존 subtree 브랜치가 있으면 삭제
+        run_command(
+            ['git', 'branch', '-D', subtree_branch],
             cwd=project_root, check=False
         )
-        # myxplanner 폴더가 포함된 최신 커밋 찾기
-        latest_commit, _ = run_command(
-            ['git', 'log', '--oneline', '-1', '--', FOLDER_PREFIX, '--format=%H'],
-            cwd=project_root
-        )
-        # subtree를 위한 브랜치 생성 및 push
-        subtree_branch = f'subtree-{FOLDER_PREFIX}'
+        
+        # subtree split으로 분리 및 브랜치 생성
         run_command(
             ['git', 'subtree', 'split', '--prefix', FOLDER_PREFIX, '-b', subtree_branch],
             cwd=project_root
         )
+        
         # force push
         run_command(
             ['git', 'push', REMOTE_NAME, f'{subtree_branch}:{BRANCH}', '--force'],
             cwd=project_root
         )
+        
         # 임시 브랜치 삭제
         run_command(
             ['git', 'branch', '-D', subtree_branch],
