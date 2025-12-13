@@ -1699,10 +1699,11 @@ class ApiService {
               .toList();
           
           Map<String, String> contractToProgramAvailability = {};
+          Map<String, String> contractToProhibitedTsId = {};
           if (contractIds.isNotEmpty) {
             final contractRecords = await getData(
               table: 'v2_contracts',
-              fields: ['contract_id', 'program_reservation_availability'],
+              fields: ['contract_id', 'program_reservation_availability', 'prohibited_ts_id'],
               where: [
                 {'field': 'branch_id', 'operator': '=', 'value': branchId},
                 {'field': 'contract_id', 'operator': 'IN', 'value': contractIds},
@@ -1712,8 +1713,10 @@ class ApiService {
             for (final contractRecord in contractRecords) {
               final contractId = contractRecord['contract_id']?.toString();
               final programAvailability = contractRecord['program_reservation_availability']?.toString() ?? '';
+              final prohibitedTsId = contractRecord['prohibited_ts_id']?.toString() ?? '';
               if (contractId != null) {
                 contractToProgramAvailability[contractId] = programAvailability;
+                contractToProhibitedTsId[contractId] = prohibitedTsId;
               }
             }
           }
@@ -1733,12 +1736,16 @@ class ApiService {
             if (contractHistoryId != null && historyToContractMap.containsKey(contractHistoryId)) {
               final contractId = historyToContractMap[contractHistoryId];
               final programAvailability = contractToProgramAvailability[contractId] ?? '';
+              final prohibitedTsId = contractToProhibitedTsId[contractId] ?? '';
               
               // program_reservation_availability가 null이거나 빈 문자열인 경우만 타석 예약 가능
               final isValidForTsReservation = programAvailability.isEmpty || 
                                             programAvailability.toLowerCase() == 'null';
               
-              print('시간권 계약 $contractHistoryId → contract_id: $contractId → program_availability: "$programAvailability" → 타석예약가능: $isValidForTsReservation');
+              // prohibited_ts_id 정보를 contract에 추가
+              contract['prohibited_ts_id'] = prohibitedTsId;
+              
+              print('시간권 계약 $contractHistoryId → contract_id: $contractId → program_availability: "$programAvailability" → prohibited_ts_id: "$prohibitedTsId" → 타석예약가능: $isValidForTsReservation');
               
               if (isValidForTsReservation) {
                 timePassContracts.add(contract);
@@ -2057,7 +2064,7 @@ class ApiService {
         fields: [
           'contract_id', 'contract_name', 'contract_type',
           'available_days', 'available_start_time', 'available_end_time',
-          'available_ts_id', 'program_reservation_availability',
+          'available_ts_id', 'prohibited_ts_id', 'prohibited_TS_id', 'program_reservation_availability',
           'max_min_reservation_ahead', 'coupon_issue_available',
           'coupon_use_available', 'max_ts_use_min', 'max_use_per_day',
           'max_ls_per_day', 'max_ls_min_session'
@@ -2084,6 +2091,8 @@ class ApiService {
           print('  - available_days: ${detail['available_days']}');
           print('  - available_time: ${detail['available_start_time']} ~ ${detail['available_end_time']}');
           print('  - available_ts_id: ${detail['available_ts_id']}');
+          print('  - prohibited_ts_id: ${detail['prohibited_ts_id']}');
+          print('  - prohibited_TS_id: ${detail['prohibited_TS_id']}');
           print('  - program_reservation: ${detail['program_reservation_availability']}');
           print('  - max_min_reservation_ahead: ${detail['max_min_reservation_ahead']}');
           print('  - coupon_issue_available: ${detail['coupon_issue_available']}');
@@ -2103,6 +2112,12 @@ class ApiService {
           if (details != null) {
             result[historyId] = Map<String, dynamic>.from(details);
             result[historyId]!['contract_history_id'] = historyId;
+            // prohibited_ts_id와 prohibited_TS_id 중 하나라도 있으면 사용
+            final prohibitedTsId = details['prohibited_ts_id'] ?? details['prohibited_TS_id'];
+            if (prohibitedTsId != null) {
+              result[historyId]!['prohibited_ts_id'] = prohibitedTsId;
+              result[historyId]!['prohibited_TS_id'] = prohibitedTsId;
+            }
           }
         }
       }
@@ -2445,7 +2460,7 @@ class ApiService {
       // 5. v2_contracts에서 이용 조건 조회
       final contractDetails = await getData(
         table: 'v2_contracts',
-        fields: ['contract_id', 'contract_name', 'available_days', 'available_start_time', 'available_end_time', 'available_ts_id', 'program_reservation_availability'],
+        fields: ['contract_id', 'contract_name', 'available_days', 'available_start_time', 'available_end_time', 'available_ts_id', 'prohibited_ts_id', 'program_reservation_availability'],
         where: [
           {'field': 'branch_id', 'operator': '=', 'value': branchId},
           {'field': 'contract_id', 'operator': 'IN', 'value': contractIds},
@@ -4159,11 +4174,13 @@ class ApiService {
   static Future<Map<String, dynamic>> getMemberLsCountingDataForProgram({
     required String memberId,
     String? reservationDate, // 예약 날짜 추가
+    String? programId, // 특정 프로그램 ID로 필터링 (선택)
   }) async {
     try {
       print('=== getMemberLsCountingDataForProgram 함수 시작 ===');
       print('회원 ID: $memberId');
       print('예약 날짜: $reservationDate');
+      print('프로그램 ID: $programId');
       
       final branchId = getCurrentBranchId();
       if (branchId == null) {
@@ -4391,7 +4408,9 @@ class ApiService {
           print('v2_contracts에서 조회된 레슨 계약 수: ${contractsResult.length}');
           
           // program_reservation_availability가 유효한 contract_id 수집
+          // programId가 지정된 경우 해당 프로그램과 정확히 일치하는 계약만 필터링
           Set<String> validContractIds = {};
+          Map<String, String> contractToProgramMap = {}; // contract_id -> program_availability 매핑
           for (final contractInfo in contractsResult) {
             final contractId = contractInfo['contract_id']?.toString();
             final programAvailability = contractInfo['program_reservation_availability']?.toString();
@@ -4400,8 +4419,21 @@ class ApiService {
                 programAvailability != null && 
                 programAvailability.isNotEmpty && 
                 programAvailability != '0') {
-              validContractIds.add(contractId);
-              print('유효한 레슨 계약: $contractId (program_availability: $programAvailability)');
+              // programId가 지정된 경우: 정확히 일치하는 프로그램만 필터링
+              if (programId != null) {
+                if (programAvailability == programId) {
+                  validContractIds.add(contractId);
+                  contractToProgramMap[contractId] = programAvailability;
+                  print('✅ 프로그램 일치 레슨 계약: $contractId (program_availability: $programAvailability == $programId)');
+                } else {
+                  print('❌ 프로그램 불일치 레슨 계약: $contractId (program_availability: $programAvailability != $programId)');
+                }
+              } else {
+                // programId가 없는 경우: 기존 로직 (모든 프로그램 예약 가능 계약 포함)
+                validContractIds.add(contractId);
+                contractToProgramMap[contractId] = programAvailability;
+                print('유효한 레슨 계약: $contractId (program_availability: $programAvailability)');
+              }
             } else {
               print('프로그램 예약 불가능한 레슨 계약: $contractId (program_availability: $programAvailability)');
             }
@@ -4416,16 +4448,19 @@ class ApiService {
             if (contractHistoryId != null &&
                 actualContractId != null &&
                 validContractIds.contains(actualContractId)) {
-              // contract_name 추가
+              // contract_name 및 program_reservation_availability 추가
               final contractName = historyToContractNameMap[contractHistoryId];
+              final programAvailability = contractToProgramMap[actualContractId];
               record['contract_name'] = contractName;
+              record['program_reservation_availability'] = programAvailability;
+              record['actual_contract_id'] = actualContractId;
 
               programValidRecords.add(record);
               final proId = record['pro_id']?.toString();
               if (proId != null && proId.isNotEmpty) {
                 finalValidProIds.add(proId);
               }
-              print('✅ 유효한 레슨 기록: contract_history_id=$contractHistoryId, contract_id=$actualContractId, contract_name=$contractName');
+              print('✅ 유효한 레슨 기록: contract_history_id=$contractHistoryId, contract_id=$actualContractId, contract_name=$contractName, program=$programAvailability');
             } else {
               print('❌ 프로그램 예약 불가능한 레슨: contract_history_id=$contractHistoryId, contract_id=$actualContractId');
             }

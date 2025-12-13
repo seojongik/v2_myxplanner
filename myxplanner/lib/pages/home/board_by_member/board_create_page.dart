@@ -288,28 +288,37 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
   Widget build(BuildContext context) {
     final isEditing = widget.editingBoard != null;
 
-    return Scaffold(
-      backgroundColor: Color(0xFFF8F9FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Color(0xFF1A1A1A),
-        title: Text(
-          isEditing ? '게시글 수정' : '새 게시글',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+    return GestureDetector(
+      // 화면 탭 시 키보드 내리기
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: Color(0xFFF8F9FA),
+        // iOS에서 키보드가 올라올 때 화면 크기 조정
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          foregroundColor: Color(0xFF1A1A1A),
+          title: Text(
+            isEditing ? '게시글 수정' : '새 게시글',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+          centerTitle: true,
+          elevation: 0,
         ),
-        centerTitle: true,
-        elevation: 0,
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            // 키보드가 올라올 때 스크롤 동작 설정
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               // 게시판 유형 표시 (고정값)
               if (!isEditing) ...[
                 Container(
@@ -611,6 +620,12 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
                         maxLines: null,
                         expands: true,
                         textAlignVertical: TextAlignVertical.top,
+                        // 키보드 완료 버튼을 "완료"로 설정
+                        textInputAction: TextInputAction.done,
+                        // 완료 버튼 클릭 시 키보드 내리기
+                        onSubmitted: (_) {
+                          FocusScope.of(context).unfocus();
+                        },
                         decoration: InputDecoration(
                           hintText: '내용을 입력하세요',
                           border: InputBorder.none,
@@ -671,6 +686,7 @@ class _BoardCreatePageState extends State<BoardCreatePage> {
                   ),
           ),
         ),
+      ),
       ),
     );
   }

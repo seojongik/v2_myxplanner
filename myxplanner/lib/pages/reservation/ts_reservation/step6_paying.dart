@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../services/tile_design_service.dart';
 import '../../../../services/api_service.dart';
-import '../../../../services/holiday_service.dart';
 
 class Step6Paying extends StatefulWidget {
   final bool isAdminMode;
@@ -1127,57 +1126,7 @@ class Step6PayingState extends State<Step6Paying> {
     required String selectedTs,
     Map<String, int>? dailyUsage,
   }) async {
-    // 1. 요일 체크 (공휴일 고려)
-    final availableDays = contract['available_days']?.toString();
-    if (availableDays != null && availableDays.isNotEmpty && availableDays != 'null') {
-      // "전체"는 모든 요일 허용 (제약 없음)
-      if (availableDays == '전체') {
-        print('기간권 ${contract['contract_history_id']}: 요일 제약 없음 (전체)');
-      } else {
-        final weekday = selectedDate.weekday; // DateTime의 weekday: 1=월, 2=화, ..., 7=일
-
-        // 설정된 요일들 분석
-        final daysList = availableDays.split(',').map((d) => d.trim()).toList();
-        bool isValidDay = false;
-
-        for (final day in daysList) {
-          if (day == '공휴일') {
-            // 공휴일 체크
-            try {
-              final isHoliday = await HolidayService.isHoliday(selectedDate);
-              if (isHoliday) {
-                isValidDay = true;
-                print('기간권 ${contract['contract_history_id']}: 공휴일 조건 일치');
-                break;
-              }
-            } catch (e) {
-              print('기간권 ${contract['contract_history_id']}: 공휴일 체크 오류 - $e');
-            }
-          } else {
-            // 일반 요일 체크
-            final weekdayMap = {
-              '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 7
-            };
-
-            final dayNumber = weekdayMap[day];
-            if (dayNumber != null && dayNumber == weekday) {
-              isValidDay = true;
-              print('기간권 ${contract['contract_history_id']}: 요일 조건 일치 ($day)');
-              break;
-            }
-          }
-        }
-
-        if (!isValidDay) {
-          print('기간권 ${contract['contract_history_id']}: 요일 불일치');
-          print('  설정된 요일: $availableDays');
-          print('  선택된 날짜: ${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')} (요일: $weekday)');
-          return 0; // 요일이 맞지 않음
-        }
-      }
-    }
-    
-    // 2. 시간대 체크
+    // 1. 시간대 체크
     final availableStartTime = contract['available_start_time']?.toString();
     final availableEndTime = contract['available_end_time']?.toString();
 
@@ -1307,6 +1256,21 @@ class Step6PayingState extends State<Step6Paying> {
           return 0; // 타석이 맞지 않음
         }
       }
+    }
+    
+    // 5. 선택 불가능 타석 체크 (prohibited_ts_id)
+    final prohibitedTsId = contract['prohibited_ts_id']?.toString();
+    if (prohibitedTsId != null && prohibitedTsId.isNotEmpty && prohibitedTsId != 'null') {
+      // 콤마로 구분된 타석 ID 리스트로 변환
+      final prohibitedTsList = prohibitedTsId.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+      
+      // 선택한 타석이 제한된 타석 목록에 포함되어 있는지 확인
+      if (prohibitedTsList.contains(selectedTs)) {
+        print('기간권 ${contract['contract_history_id']}: 선택 불가능한 타석 (제한된 타석: $prohibitedTsId, 선택: $selectedTs)');
+        return 0; // 선택 불가능한 타석
+      }
+      
+      print('기간권 ${contract['contract_history_id']}: 선택 가능한 타석 (제한된 타석: $prohibitedTsId, 선택: $selectedTs)');
     }
     
     // 모든 조건을 통과한 경우 사용 가능 분수 반환

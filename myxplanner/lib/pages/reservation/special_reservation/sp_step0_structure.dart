@@ -527,9 +527,14 @@ class _SpStep0StructureState extends State<SpStep0Structure> with TickerProvider
       );
       
       // 프로그램 예약용 레슨 계약 데이터 조회 (예약 날짜 기준 만료일 검증 포함)
+      // 선택된 프로그램 ID로 필터링하여 해당 프로그램에 맞는 프로만 조회
+      final programId = _specialSettings['program_id']?.toString();
+      print('📌 프로그램 ID로 레슨 계약 필터링: $programId');
+      
       final lessonContractsResponse = await ApiService.getMemberLsCountingDataForProgram(
         memberId: memberId.toString(),
         reservationDate: reservationDateStr,
+        programId: programId,
       );
       final lessonContracts = lessonContractsResponse['data'] as List<Map<String, dynamic>>? ?? [];
 

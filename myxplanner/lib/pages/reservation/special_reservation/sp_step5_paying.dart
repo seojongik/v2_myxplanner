@@ -105,6 +105,168 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
     return totalLsMin;
   }
 
+  // 계약 제약조건 체크 (회원권 제시 여부 결정)
+  bool _checkContractConstraints(Map<String, dynamic> contract, Map<String, dynamic>? contractDetail, Map<String, int> dailyUsage) {
+    // 계약 상세 정보가 없으면 통과
+    if (contractDetail == null) {
+      return true;
+    }
+
+    // 계약 상세 정보 병합
+    final mergedContract = Map<String, dynamic>.from(contract);
+    mergedContract.addAll(contractDetail);
+
+    // 필요한 정보가 없으면 통과
+    if (widget.selectedDate == null || widget.selectedTime == null || widget.selectedTsId == null) {
+      return true;
+    }
+
+    final selectedDate = widget.selectedDate!;
+    final selectedTime = widget.selectedTime!;
+    final selectedTs = widget.selectedTsId.toString();
+
+    // 1. 시간대 체크 (available_start_time, available_end_time)
+    final availableStartTime = mergedContract['available_start_time']?.toString();
+    final availableEndTime = mergedContract['available_end_time']?.toString();
+
+    if (availableStartTime != null && availableStartTime.isNotEmpty && availableStartTime != 'null' &&
+        availableEndTime != null && availableEndTime.isNotEmpty && availableEndTime != 'null') {
+      
+      if (availableStartTime != '전체' && availableEndTime != '전체') {
+        try {
+          // 선택한 시간을 분 단위로 변환
+          final selectedTimeParts = selectedTime.split(':');
+          final selectedHour = int.parse(selectedTimeParts[0]);
+          final selectedMinute = selectedTimeParts.length > 1 ? int.parse(selectedTimeParts[1]) : 0;
+          final selectedTimeInMinutes = selectedHour * 60 + selectedMinute;
+          
+          // 예약 시간 계산 (specialSettings에서 ts_min 합계 사용)
+          final totalTsMin = _getTotalTsMin();
+          final selectedEndTimeInMinutes = selectedTimeInMinutes + totalTsMin;
+
+          // 이용 가능 시간을 분 단위로 변환
+          final availableStartParts = availableStartTime.split(':');
+          final availableStartHour = int.parse(availableStartParts[0]);
+          final availableStartMinute = availableStartParts.length > 1 ? int.parse(availableStartParts[1]) : 0;
+          final availableStartInMinutes = availableStartHour * 60 + availableStartMinute;
+
+          final availableEndParts = availableEndTime.split(':');
+          final availableEndHour = int.parse(availableEndParts[0]);
+          final availableEndMinute = availableEndParts.length > 1 ? int.parse(availableEndParts[1]) : 0;
+          final availableEndInMinutes = availableEndHour * 60 + availableEndMinute;
+
+          // 예약 시간이 이용 가능 시간 범위를 벗어나는지 체크
+          if (selectedTimeInMinutes < availableStartInMinutes ||
+              selectedEndTimeInMinutes > availableEndInMinutes) {
+            print('시간권 계약 ${contract['contract_history_id']}: 시간대 불일치');
+            print('  이용 가능: $availableStartTime ~ $availableEndTime');
+            print('  선택 시간: $selectedTime ~ 종료 ${totalTsMin}분 후');
+            return false;
+          }
+        } catch (e) {
+          print('시간권 계약 ${contract['contract_history_id']}: 시간 파싱 오류 - $e');
+        }
+      }
+    }
+
+    // 2. 예약 시간 제약 체크 (max_min_reservation_ahead)
+    final maxMinReservationAhead = mergedContract['max_min_reservation_ahead'];
+    if (maxMinReservationAhead != null && maxMinReservationAhead != 'null' && maxMinReservationAhead != '') {
+      try {
+        final minReservationMinutes = int.tryParse(maxMinReservationAhead.toString());
+        if (minReservationMinutes != null && minReservationMinutes > 0) {
+          final selectedTimeParts = selectedTime.split(':');
+          final selectedHour = int.parse(selectedTimeParts[0]);
+          final selectedMinute = selectedTimeParts.length > 1 ? int.parse(selectedTimeParts[1]) : 0;
+          
+          final reservationDateTime = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day,
+            selectedHour,
+            selectedMinute,
+          );
+          
+          final now = DateTime.now();
+          final timeDifferenceMinutes = reservationDateTime.difference(now).inMinutes;
+          
+          // 예약 시간이 최소 예약 시간보다 가까우면 사용 불가
+          if (timeDifferenceMinutes < minReservationMinutes) {
+            print('시간권 계약 ${contract['contract_history_id']}: 예약 시간 제약 불일치 (${timeDifferenceMinutes}분 < ${minReservationMinutes}분)');
+            return false;
+          }
+        }
+      } catch (e) {
+        print('시간권 계약 ${contract['contract_history_id']}: 예약 시간 제약 파싱 오류 - $e');
+      }
+    }
+
+    // 3. 타석 체크 (available_ts_id)
+    final availableTsId = mergedContract['available_ts_id']?.toString();
+    if (availableTsId != null && availableTsId.isNotEmpty && availableTsId != 'null') {
+      if (availableTsId != '없음' && availableTsId != '전체') {
+        bool isTsAvailable = false;
+
+        if (availableTsId.contains('-')) {
+          // 범위 형식 (1-5)
+          final rangeParts = availableTsId.split('-');
+          if (rangeParts.length == 2) {
+            try {
+              final startTs = int.parse(rangeParts[0].trim());
+              final endTs = int.parse(rangeParts[1].trim());
+              final selectedTsNum = int.parse(selectedTs);
+
+              if (selectedTsNum >= startTs && selectedTsNum <= endTs) {
+                isTsAvailable = true;
+              }
+            } catch (e) {
+              print('시간권 계약 ${contract['contract_history_id']}: 타석 범위 파싱 오류 - $e');
+            }
+          }
+        } else if (availableTsId.contains(',')) {
+          // 개별 목록 (1,2,3)
+          final tsList = availableTsId.split(',').map((t) => t.trim()).toList();
+          if (tsList.contains(selectedTs)) {
+            isTsAvailable = true;
+          }
+        } else {
+          // 단일 타석
+          if (availableTsId.trim() == selectedTs) {
+            isTsAvailable = true;
+          }
+        }
+
+        if (!isTsAvailable) {
+          print('시간권 계약 ${contract['contract_history_id']}: 타석 불일치 (설정: $availableTsId, 선택: $selectedTs)');
+          return false;
+        }
+      }
+    }
+
+    // 4. max_use_per_day 체크 (일일 최대 사용 시간)
+    final maxUsePerDay = mergedContract['max_use_per_day'];
+    if (maxUsePerDay != null && maxUsePerDay != 'null' && maxUsePerDay != '') {
+      try {
+        final maxDailyMinutes = int.tryParse(maxUsePerDay.toString());
+        if (maxDailyMinutes != null && maxDailyMinutes > 0) {
+          final contractHistoryId = contract['contract_history_id']?.toString();
+          final usedToday = contractHistoryId != null ? (dailyUsage[contractHistoryId] ?? 0) : 0;
+          final totalTsMin = _getTotalTsMin();
+          
+          // 오늘 사용한 분수 + 예약하려는 분수가 최대 일일 사용 시간을 초과하면 제외
+          if (usedToday + totalTsMin > maxDailyMinutes) {
+            print('시간권 계약 ${contract['contract_history_id']}: max_use_per_day 초과 - 오늘 ${usedToday}분/${maxDailyMinutes}분 이미 사용, 예약 ${totalTsMin}분 추가 시 초과');
+            return false;
+          }
+        }
+      } catch (e) {
+        print('시간권 계약 ${contract['contract_history_id']}: max_use_per_day 파싱 오류 - $e');
+      }
+    }
+
+    return true;
+  }
+
   /// 회원권 선택 시 DB 업데이트 트리거
   Future<void> _triggerDatabaseUpdate(Map<String, dynamic> contract) async {
     if (widget.selectedDate == null || 
@@ -205,16 +367,18 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
   // 최신 레슨권 잔액 조회
   Future<int> _getCurrentLessonBalance(Map<String, dynamic> contract) async {
     try {
-      final currentUser = widget.selectedMember ?? ApiService.getCurrentUser();
-      final memberId = currentUser?['member_id']?.toString() ?? '';
-      final lsContractId = contract['contract_id']?.toString() ?? '';
+      final contractHistoryId = contract['contract_history_id']?.toString() ?? '';
+      
+      if (contractHistoryId.isEmpty) {
+        print('레슨권 잔액 조회 실패: contract_history_id가 없음');
+        return contract['lesson_balance'] as int? ?? 0;
+      }
       
       final latestBalanceResult = await ApiService.getData(
         table: 'v3_LS_countings',
         fields: ['LS_balance_min_after'],
         where: [
-          {'field': 'member_id', 'operator': '=', 'value': memberId},
-          {'field': 'LS_contract_id', 'operator': '=', 'value': lsContractId},
+          {'field': 'contract_history_id', 'operator': '=', 'value': contractHistoryId},
         ],
         orderBy: [
           {'field': 'LS_counting_id', 'direction': 'DESC'}
@@ -223,13 +387,13 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
       );
       
       if (latestBalanceResult.isNotEmpty && latestBalanceResult.first['LS_balance_min_after'] != null) {
-        return int.tryParse(latestBalanceResult.first['LS_balance_min_after'].toString()) ?? (contract['lesson_balance'] as int);
+        return int.tryParse(latestBalanceResult.first['LS_balance_min_after'].toString()) ?? (contract['lesson_balance'] as int? ?? 0);
       } else {
-        return contract['lesson_balance'] as int;
+        return contract['lesson_balance'] as int? ?? 0;
       }
     } catch (e) {
       print('최신 레슨권 잔액 조회 실패: $e');
-      return contract['lesson_balance'] as int;
+      return contract['lesson_balance'] as int? ?? 0;
     }
   }
 
@@ -671,11 +835,55 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
   }
 
   // 시간권과 레슨권의 교집합 찾기
-  void _findAvailableContracts() {
+  Future<void> _findAvailableContracts() async {
     final availableContracts = <Map<String, dynamic>>[];
     final addedContracts = <String>{}; // 중복 방지를 위한 Set
     final totalTsMin = _getTotalTsMin();
     final totalLsMin = _getTotalLsMin();
+    
+    // 계약 상세 정보 조회 (제약조건 체크를 위해)
+    Map<String, Map<String, dynamic>> contractDetails = {};
+    final allContractHistoryIds = <String>[];
+    
+    for (final timePass in _timePassContracts) {
+      final historyId = timePass['contract_history_id']?.toString();
+      if (historyId != null && historyId.isNotEmpty) {
+        allContractHistoryIds.add(historyId);
+      }
+    }
+    
+    if (allContractHistoryIds.isNotEmpty) {
+      try {
+        contractDetails = await ApiService.getContractDetails(
+          contractHistoryIds: allContractHistoryIds,
+        );
+        print('📋 계약 상세 정보 조회 완료: ${contractDetails.length}개');
+      } catch (e) {
+        print('❌ 계약 상세 정보 조회 실패: $e');
+      }
+    }
+    
+    // 당일 사용량 조회 (max_use_per_day 제한 적용용)
+    Map<String, int> dailyUsage = {};
+    if (widget.selectedDate != null) {
+      try {
+        final currentUser = widget.selectedMember ?? ApiService.getCurrentUser();
+        final memberId = currentUser?['member_id']?.toString();
+        if (memberId != null) {
+          final billDateStr = DateFormat('yyyy-MM-dd').format(widget.selectedDate!);
+          dailyUsage = await ApiService.getDailyUsageByContract(
+            memberId: memberId,
+            billDate: billDateStr,
+          );
+          print('\n=== 당일 사용량 조회 결과 ===');
+          dailyUsage.forEach((contractHistoryId, usedMinutes) {
+            print('계약 $contractHistoryId: ${usedMinutes}분 이미 사용');
+          });
+        }
+      } catch (e) {
+        print('❌ 당일 사용량 조회 실패: $e');
+      }
+    }
     
     print('');
     print('🔍 회원권 교집합 분석 시작');
@@ -690,6 +898,8 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
       print('시간권 $i: ${timePass.keys.toList()}');
       print('  contract_name: ${timePass['contract_name']}');
       print('  contract_history_id: ${timePass['contract_history_id']}');
+      print('  prohibited_ts_id: ${timePass['prohibited_ts_id']}');
+      print('  prohibited_TS_id: ${timePass['prohibited_TS_id']}');
     }
     
     // 디버깅: 레슨 데이터 구조 확인  
@@ -708,6 +918,29 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
       for (final timePass in _timePassContracts) {
         final balance = int.tryParse(timePass['balance']?.toString() ?? '0') ?? 0;
         if (balance >= totalTsMin) {
+          final historyId = timePass['contract_history_id']?.toString();
+          final contractDetail = historyId != null ? contractDetails[historyId] : null;
+          
+          // 제약조건 체크
+          if (!_checkContractConstraints(timePass, contractDetail, dailyUsage)) {
+            continue; // 제약조건 불일치 시 제외
+          }
+          
+          // prohibited_ts_id 체크
+          final prohibitedTsIdFromTimePass = timePass['prohibited_ts_id']?.toString() ?? timePass['prohibited_TS_id']?.toString() ?? '';
+          final prohibitedTsIdFromDetail = contractDetail?['prohibited_ts_id']?.toString() ?? contractDetail?['prohibited_TS_id']?.toString() ?? '';
+          final prohibitedTsId = prohibitedTsIdFromTimePass.isNotEmpty && prohibitedTsIdFromTimePass != 'null' 
+              ? prohibitedTsIdFromTimePass 
+              : (prohibitedTsIdFromDetail.isNotEmpty && prohibitedTsIdFromDetail != 'null' ? prohibitedTsIdFromDetail : '');
+          
+          if (prohibitedTsId.isNotEmpty && prohibitedTsId != 'null' && widget.selectedTsId != null) {
+            final prohibitedTsList = prohibitedTsId.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+            if (prohibitedTsList.contains(widget.selectedTsId.toString())) {
+              print('시간권 계약 ${timePass['contract_history_id']}: 선택 불가능한 타석 (제한된 타석: $prohibitedTsId, 선택: ${widget.selectedTsId})');
+              continue; // 선택 불가능한 타석이면 제외
+            }
+          }
+          
           final contractName = timePass['contract_name'] ?? '시간권 계약';
           
           availableContracts.add({
@@ -762,6 +995,29 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
       for (final timePass in _timePassContracts) {
         final timeBalance = int.tryParse(timePass['balance']?.toString() ?? '0') ?? 0;
         if (timeBalance >= totalTsMin) {
+          final historyId = timePass['contract_history_id']?.toString();
+          final contractDetail = historyId != null ? contractDetails[historyId] : null;
+          
+          // 제약조건 체크
+          if (!_checkContractConstraints(timePass, contractDetail, dailyUsage)) {
+            continue; // 제약조건 불일치 시 제외
+          }
+          
+          // prohibited_ts_id 체크
+          final prohibitedTsIdFromTimePass = timePass['prohibited_ts_id']?.toString() ?? timePass['prohibited_TS_id']?.toString() ?? '';
+          final prohibitedTsIdFromDetail = contractDetail?['prohibited_ts_id']?.toString() ?? contractDetail?['prohibited_TS_id']?.toString() ?? '';
+          final prohibitedTsId = prohibitedTsIdFromTimePass.isNotEmpty && prohibitedTsIdFromTimePass != 'null' 
+              ? prohibitedTsIdFromTimePass 
+              : (prohibitedTsIdFromDetail.isNotEmpty && prohibitedTsIdFromDetail != 'null' ? prohibitedTsIdFromDetail : '');
+          
+          if (prohibitedTsId.isNotEmpty && prohibitedTsId != 'null' && widget.selectedTsId != null) {
+            final prohibitedTsList = prohibitedTsId.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+            if (prohibitedTsList.contains(widget.selectedTsId.toString())) {
+              print('시간권 계약 ${timePass['contract_history_id']}: 선택 불가능한 타석 (제한된 타석: $prohibitedTsId, 선택: ${widget.selectedTsId})');
+              continue; // 선택 불가능한 타석이면 제외
+            }
+          }
+          
           validTimePassContracts.add(timePass);
         }
       }
@@ -859,7 +1115,7 @@ class _SpStep5PayingState extends State<SpStep5Paying> {
         await _loadLessonContracts();
       }
 
-      _findAvailableContracts();
+      await _findAvailableContracts();
 
     } catch (e) {
       print('❌ 결제 데이터 로드 실패: $e');

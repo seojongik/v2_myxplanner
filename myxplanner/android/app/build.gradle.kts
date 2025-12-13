@@ -19,7 +19,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "app.mygolfplanner"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35  // Android 15 (더 넓은 화면 지원)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -38,7 +38,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion  // Firebase Auth 최소 요구사항
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35  // Android 15 (더 넓은 화면 지원)
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true  // Firebase 때문에 필요

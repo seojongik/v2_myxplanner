@@ -21,6 +21,9 @@ class MainPage extends StatefulWidget {
   final Map<String, dynamic>? selectedMember;
   final String? branchId;
   final int initialIndex; // 초기 탭 인덱스
+  final String? initialReservationType; // 초기 예약 타입 (예약 탭에서 자동 선택)
+  final DateTime? initialDate; // 초기 날짜 (레슨에서 타석 예약 시 사용)
+  final String? initialTime; // 초기 시작 시간 (레슨에서 타석 예약 시 사용)
 
   const MainPage({
     Key? key,
@@ -28,6 +31,9 @@ class MainPage extends StatefulWidget {
     this.selectedMember,
     this.branchId,
     this.initialIndex = 0, // 기본값 0 (홈)
+    this.initialReservationType,
+    this.initialDate,
+    this.initialTime,
   }) : super(key: key);
 
   @override
@@ -562,6 +568,9 @@ class _MainPageState extends State<MainPage> {
           isAdminMode: widget.isAdminMode,
           selectedMember: _currentMember,
           branchId: _currentBranchId,
+          initialReservationType: widget.initialReservationType,
+          initialDate: widget.initialDate,
+          initialTime: widget.initialTime,
         );
       case 3:
         return MembershipPage(

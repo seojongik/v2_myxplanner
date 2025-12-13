@@ -425,6 +425,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'station': item['pro_name'] ?? '',
         'status': item['LS_status'] ?? '',
         'programId': item['program_id'],
+        'memberId': item['member_id']?.toString() ?? '',  // 회원 ID 추가
         'memberName': item['member_name'] ?? '',
         'reservationId': item['LS_orders_id']?.toString() ?? '',
         'lessonOrderId': item['LS_order_id']?.toString() ?? '',
@@ -568,6 +569,7 @@ class _ReservationHistorySearchContentState extends State<ReservationHistorySear
         'station': item['pro_name'] ?? '',
         'status': item['LS_status'] ?? '',
         'programId': item['program_id'],
+        'memberId': item['member_id']?.toString() ?? '',  // 회원 ID 추가
         'memberName': item['member_name'] ?? '',
         'reservationId': item['LS_orders_id']?.toString() ?? '',
         'lessonOrderId': item['LS_order_id']?.toString() ?? '',

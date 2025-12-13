@@ -226,7 +226,6 @@ class SpDbUpdateService {
       final programId = _generateProgramId(selectedDate, selectedProId, selectedTime, specialSettings);
       
       // 타석 정보
-      final tsName = await _getTsName(selectedTsId);
       final proName = selectedProName;
       
       // 시간 블록 분석
@@ -834,16 +833,18 @@ class SpDbUpdateService {
   /// 최신 레슨권 잔액 조회
   static Future<int> _getCurrentLessonBalance(Map<String, dynamic> contract) async {
     try {
-      final currentUser = ApiService.getCurrentUser();
-      final memberId = currentUser?['member_id']?.toString() ?? '';
-      final lsContractId = contract['contract_id']?.toString() ?? '';
+      final contractHistoryId = contract['contract_history_id']?.toString() ?? '';
+      
+      if (contractHistoryId.isEmpty) {
+        print('레슨권 잔액 조회 실패: contract_history_id가 없음');
+        return contract['lesson_balance'] as int? ?? 0;
+      }
       
       final latestBalanceResult = await ApiService.getData(
         table: 'v3_LS_countings',
         fields: ['LS_balance_min_after'],
         where: [
-          {'field': 'member_id', 'operator': '=', 'value': memberId},
-          {'field': 'LS_contract_id', 'operator': '=', 'value': lsContractId},
+          {'field': 'contract_history_id', 'operator': '=', 'value': contractHistoryId},
         ],
         orderBy: [
           {'field': 'LS_counting_id', 'direction': 'DESC'}
@@ -852,13 +853,13 @@ class SpDbUpdateService {
       );
       
       if (latestBalanceResult.isNotEmpty && latestBalanceResult.first['LS_balance_min_after'] != null) {
-        return int.tryParse(latestBalanceResult.first['LS_balance_min_after'].toString()) ?? (contract['lesson_balance'] as int);
+        return int.tryParse(latestBalanceResult.first['LS_balance_min_after'].toString()) ?? (contract['lesson_balance'] as int? ?? 0);
       } else {
-        return contract['lesson_balance'] as int;
+        return contract['lesson_balance'] as int? ?? 0;
       }
     } catch (e) {
       print('최신 레슨권 잔액 조회 실패: $e');
-      return contract['lesson_balance'] as int;
+      return contract['lesson_balance'] as int? ?? 0;
     }
   }
 

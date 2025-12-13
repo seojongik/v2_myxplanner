@@ -13,55 +13,41 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 # Available Actions
 
-## iOS
+## Android
 
-### ios beta
-
-```sh
-[bundle exec] fastlane ios beta
-```
-
-Flutter 빌드 및 TestFlight에 업로드
-
-### ios release
+### android build_only
 
 ```sh
-[bundle exec] fastlane ios release
+[bundle exec] fastlane android build_only
 ```
 
-Flutter 빌드 및 App Store에 업로드 (제출 없음)
-
-### ios build_only
-
-```sh
-[bundle exec] fastlane ios build_only
-```
+AAB 파일 경로 찾기
 
 Flutter 빌드만 (업로드 없이)
 
-### ios upload_testflight
+### android release
 
 ```sh
-[bundle exec] fastlane ios upload_testflight
+[bundle exec] fastlane android release
 ```
 
-TestFlight에 제출 (이미 빌드된 IPA 사용)
+Flutter 빌드 및 Google Play에 업로드 (제출 없음)
 
-### ios upload_appstore
+### android submit
 
 ```sh
-[bundle exec] fastlane ios upload_appstore
+[bundle exec] fastlane android submit
 ```
 
-App Store에 제출 (이미 빌드된 IPA 사용)
+Flutter 빌드 및 Google Play에 자동 제출 (리뷰 제출 포함)
 
-### ios submit
+### android internal
 
 ```sh
-[bundle exec] fastlane ios submit
+[bundle exec] fastlane android internal
 ```
 
-Flutter 빌드 및 App Store에 자동 제출 (리뷰 제출 포함)
+내부 테스트 트랙에 배포
 
 ----
 

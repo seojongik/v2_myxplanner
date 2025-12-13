@@ -1003,18 +1003,46 @@ class _PortonePaymentPageState extends State<PortonePaymentPage> {
             // intent:// 또는 intent: 스킴 처리 (카카오페이, 네이버페이, 현대카드 등)
             if (url.startsWith('intent://') || url.startsWith('intent:')) {
               print('🔗 intent URL 감지: $url');
-              // intent: 로 시작하는 경우 올바르게 정규화
-              // intent:SCHEME://... -> intent://SCHEME/... (://를 /로 변경)
+              
+              // iOS에서는 intent:// 스킴을 지원하지 않으므로 실제 스킴을 추출해야 함
+              // intent:SCHEME:// 형식에서 실제 스킴 추출 (iOS 처리)
+              if (url.startsWith('intent:') && !url.startsWith('intent://')) {
+                // intent:hdcardappcardansimclick://appcard?... 형식
+                // 또는 intent:hdcardappcardansimclick://appcard?... #Intent;... 형식
+                final match = RegExp(r'intent:([^:]+)://([^#]+)').firstMatch(url);
+                if (match != null) {
+                  final scheme = match.group(1);
+                  final pathAndQuery = match.group(2);
+                  // intent: 제거하고 실제 스킴 URL로 변환
+                  final actualUrl = '$scheme://$pathAndQuery';
+                  print('🔗 iOS용 실제 스킴 추출: $actualUrl');
+                  
+                  // iOS에서는 직접 스킴으로 열기
+                  if (!kIsWeb) {
+                    _launchExternalApp(actualUrl).then((success) {
+                      if (success) {
+                        print('✅ iOS 앱 실행 성공: $actualUrl');
+                      } else {
+                        print('⚠️ iOS 앱 실행 실패, WebView에서 이전 페이지로 돌아감');
+                        Future.delayed(Duration(milliseconds: 300), () {
+                          _webViewController?.goBack();
+                        });
+                      }
+                    });
+                    return NavigationDecision.prevent;
+                  }
+                }
+              }
+              
+              // Android용 intent:// 처리 (기존 로직)
               String normalizedUrl = url;
               if (url.startsWith('intent:') && !url.startsWith('intent://')) {
-                // intent:hdcardappcardansimclick://... -> intent://hdcardappcardansimclick/...
                 final match = RegExp(r'intent:([^:]+)://').firstMatch(url);
                 if (match != null) {
                   final scheme = match.group(1);
                   normalizedUrl = url.replaceFirst(RegExp(r'intent:[^:]+://'), 'intent://$scheme/');
-                  print('🔗 정규화된 URL: $normalizedUrl');
+                  print('🔗 Android용 정규화된 URL: $normalizedUrl');
                 } else {
-                  // 정규식 매칭 실패 시 그대로 전달
                   normalizedUrl = url;
                 }
               }

@@ -48,6 +48,7 @@ class _Step1SelectDateState extends State<Step1SelectDate> {
   Future<void> _loadScheduleForMonth(DateTime month) async {
     if (_isLoadingSchedule) return;
     
+    if (!mounted) return;
     setState(() {
       _isLoadingSchedule = true;
     });
@@ -58,6 +59,8 @@ class _Step1SelectDateState extends State<Step1SelectDate> {
         month: month.month,
       );
 
+      if (!mounted) return;
+      
       final Map<String, Map<String, dynamic>> scheduleMap = {};
       for (final schedule in schedules) {
         final dateStr = schedule['ts_date'].toString();
@@ -70,6 +73,7 @@ class _Step1SelectDateState extends State<Step1SelectDate> {
       });
     } catch (e) {
       print('스케줄 로드 실패: $e');
+      if (!mounted) return;
       setState(() {
         _isLoadingSchedule = false;
       });

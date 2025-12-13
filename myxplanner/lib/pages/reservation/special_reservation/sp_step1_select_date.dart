@@ -147,9 +147,14 @@ class _SpStep1SelectDateState extends State<SpStep1SelectDate> {
       print('   memberInfo: ${memberInfo != null ? "존재" : "NULL"}');
       if (memberInfo != null && memberInfo['member_id'] != null) {
         final memberId = memberInfo['member_id'].toString();
+        final programId = widget.specialSettings['program_id']?.toString();
         print('   memberId: $memberId');
+        print('   programId: $programId');
         print('   API 호출 시작: getMemberLsCountingDataForProgram');
-        final result = await ApiService.getMemberLsCountingDataForProgram(memberId: memberId);
+        final result = await ApiService.getMemberLsCountingDataForProgram(
+          memberId: memberId,
+          programId: programId,
+        );
         print('   API 호출 완료: success=${result["success"]}, debug_info=${result["debug_info"] != null ? "존재" : "NULL"}');
         
         if (result['success'] == true && result['debug_info'] != null) {

@@ -10,12 +10,18 @@ class ReservationPage extends StatefulWidget {
   final bool isAdminMode;
   final Map<String, dynamic>? selectedMember;
   final String? branchId;
+  final String? initialReservationType; // 초기 예약 타입 (ts_reservation, lesson_reservation 등)
+  final DateTime? initialDate; // 초기 날짜 (레슨에서 타석 예약 시 사용)
+  final String? initialTime; // 초기 시작 시간 (레슨에서 타석 예약 시 사용)
 
   const ReservationPage({
     Key? key,
     this.isAdminMode = false,
     this.selectedMember,
     this.branchId,
+    this.initialReservationType,
+    this.initialDate,
+    this.initialTime,
   }) : super(key: key);
 
   @override
@@ -133,6 +139,15 @@ class _ReservationPageState extends State<ReservationPage> {
         reservationTypes = types;
         isLoading = false;
       });
+      
+      // 초기 예약 타입이 지정된 경우 자동 선택
+      if (widget.initialReservationType != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _selectReservationType(widget.initialReservationType!);
+          }
+        });
+      }
 
     } catch (e) {
       print('전체 예약 타입 로드 실패: $e');
@@ -406,6 +421,12 @@ class _ReservationPageState extends State<ReservationPage> {
 
   // 메인 예약 화면으로 돌아가기
   void _goBackToMain() {
+    // 레슨 조회에서 왔을 경우 (initialDate가 있으면) Navigator.pop()으로 조회 페이지로 복귀
+    if (widget.initialDate != null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    
     setState(() {
       selectedReservationType = null;
     });
@@ -423,6 +444,8 @@ class _ReservationPageState extends State<ReservationPage> {
           isAdminMode: widget.isAdminMode,
           selectedMember: widget.selectedMember,
           branchId: widget.branchId,
+          initialDate: widget.initialDate,
+          initialTime: widget.initialTime,
         );
       case 'lesson_reservation':
         return LsStep0Structure(

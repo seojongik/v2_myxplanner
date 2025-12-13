@@ -20,12 +20,16 @@ class Step0Structure extends StatefulWidget {
   final bool isAdminMode;
   final Map<String, dynamic>? selectedMember;
   final String? branchId;
+  final DateTime? initialDate; // 초기 날짜 (레슨에서 타석 예약 시 사용)
+  final String? initialTime; // 초기 시작 시간 (레슨에서 타석 예약 시 사용)
 
   const Step0Structure({
     Key? key,
     this.isAdminMode = false,
     this.selectedMember,
     this.branchId,
+    this.initialDate,
+    this.initialTime,
   }) : super(key: key);
 
   @override
@@ -82,6 +86,76 @@ class _Step0StructureState extends State<Step0Structure> with TickerProviderStat
     _stepperService = StepperService();
     _initAnimations();
     _initializeSteps();
+    
+    // 초기 날짜/시간이 주어진 경우 (레슨에서 타석 예약 유도 시)
+    if (widget.initialDate != null && widget.initialTime != null) {
+      _autoSelectDateAndTime();
+    }
+  }
+  
+  /// 레슨에서 타석 예약으로 넘어왔을 때 날짜/시간 자동 선택
+  Future<void> _autoSelectDateAndTime() async {
+    try {
+      print('🚀 [자동선택] 레슨에서 타석 예약 진입 - 날짜/시간 자동 선택 시작');
+      print('   - 초기 날짜: ${widget.initialDate}');
+      print('   - 초기 시간: ${widget.initialTime}');
+      
+      // 해당 월의 스케줄 데이터 가져오기
+      final schedules = await ApiService.getTsSchedule(
+        year: widget.initialDate!.year,
+        month: widget.initialDate!.month,
+      );
+      
+      if (!mounted) return;
+      
+      // 날짜별 스케줄 맵 생성
+      final Map<String, Map<String, dynamic>> scheduleMap = {};
+      for (final schedule in schedules) {
+        final dateStr = schedule['ts_date'].toString();
+        scheduleMap[dateStr] = schedule;
+      }
+      
+      // 해당 날짜의 스케줄 정보 추출
+      final dateKey = DateFormat('yyyy-MM-dd').format(widget.initialDate!);
+      final scheduleInfo = scheduleMap[dateKey] ?? {};
+      
+      print('📅 [자동선택] 스케줄 정보 로드 완료: $scheduleInfo');
+      
+      // 날짜와 시간 설정
+      setState(() {
+        _selectedDate = widget.initialDate;
+        _scheduleInfo = scheduleInfo;
+        _selectedTime = widget.initialTime;
+      });
+      
+      // UI 업데이트
+      _updateStepValue();
+      _refreshStepContent();
+      
+      // Step2(시간 선택, index 1)로 이동 - 사용자가 시간 변경 가능하도록
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _stepperService.goToStep(1); // Step2(시간 선택)로 이동
+          setState(() {
+            _refreshStepContent();
+          });
+          
+          // 스낵바로 안내 메시지 표시
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('레슨 날짜와 시작 시간(${widget.initialTime})이 선택되었습니다. 필요시 시간을 변경하세요.'),
+              backgroundColor: const Color(0xFF00A86B),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          
+          print('✅ [자동선택] Step2(시간 선택)로 자동 이동 완료');
+        }
+      });
+      
+    } catch (e) {
+      print('❌ [자동선택] 오류 발생: $e');
+    }
   }
 
   void _initAnimations() {

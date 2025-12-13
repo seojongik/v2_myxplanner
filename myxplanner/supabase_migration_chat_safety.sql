@@ -113,3 +113,4 @@ CREATE POLICY "Enable select for all users" ON content_reports
 
 COMMENT ON TABLE content_reports IS 'Apple App Store 가이드라인 1.2 준수 - 통합 콘텐츠 신고 테이블 (게시글, 댓글)';
 
+

@@ -10,6 +10,7 @@ import 'reservation_detail_ls_cancel.dart';
 import 'reservation_detail_sp_cancel.dart';
 import 'satisfaction_rating_widget.dart';
 import 'reservation_self_ts_move.dart';
+import '../../../main_page.dart';
 
 class ReservationDetailDialog extends StatefulWidget {
   final Map<String, dynamic> reservation;
@@ -32,6 +33,10 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   int? _currentTabBalance;
   Map<String, dynamic>? _couponPreview;
   Map<String, dynamic>? _issuedCouponPreview;
+  
+  // 레슨 예약 시 관련 타석 예약 현황
+  List<Map<String, dynamic>>? _relatedTsReservations;
+  bool _isLoadingTsReservations = false;
 
   @override
   void initState() {
@@ -39,6 +44,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
     _generateOTPIfNeeded();
     _initializeTabController();
     _loadTabData();
+    _loadRelatedTsReservations();
   }
   
   void _initializeTabController() {
@@ -125,6 +131,141 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
   void dispose() {
     _tabController?.dispose();
     super.dispose();
+  }
+
+  /// 레슨 예약 시 관련 타석 예약 현황 조회
+  Future<void> _loadRelatedTsReservations() async {
+    final reservation = widget.reservation;
+    final isLessonType = reservation['type'] == '레슨';
+    
+    // 레슨 예약이 아니면 조회하지 않음
+    if (!isLessonType) {
+      print('🔍 [타석예약현황] 레슨 예약이 아님 - 조회 건너뜀');
+      if (mounted) {
+        setState(() {
+          _relatedTsReservations = [];
+          _isLoadingTsReservations = false;
+        });
+      }
+      return;
+    }
+    
+    // 취소된 예약이면 조회하지 않음
+    final status = reservation['status']?.toString() ?? '';
+    if (status.contains('취소') || status.contains('환불')) {
+      print('🔍 [타석예약현황] 취소/환불 예약 - 조회 건너뜀');
+      if (mounted) {
+        setState(() {
+          _relatedTsReservations = [];
+          _isLoadingTsReservations = false;
+        });
+      }
+      return;
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isLoadingTsReservations = true;
+      });
+    }
+    
+    try {
+      final branchId = ApiService.getCurrentBranchId();
+      // reservation 객체에서 회원 ID 가져오기 (레슨 예약 조회 시 전달된 값)
+      final memberIdStr = reservation['memberId']?.toString();
+      final memberId = memberIdStr != null && memberIdStr.isNotEmpty 
+          ? int.tryParse(memberIdStr) 
+          : null;
+      
+      print('🔍 [타석예약현황] branchId: $branchId, memberId: $memberId (원본: $memberIdStr)');
+      
+      if (branchId == null || memberId == null) {
+        print('❌ [타석예약현황] branch_id 또는 member_id가 없습니다.');
+        if (mounted) {
+          setState(() {
+            _relatedTsReservations = [];
+            _isLoadingTsReservations = false;
+          });
+        }
+        return;
+      }
+      
+      final lessonDate = reservation['date'];
+      final lessonStartTime = reservation['startTime'];
+      final lessonEndTime = reservation['endTime'];
+      
+      print('🔍 [타석예약현황] 조회 시작');
+      print('   - branch_id: $branchId');
+      print('   - member_id: $memberId');
+      print('   - 레슨 날짜: $lessonDate');
+      print('   - 레슨 시간: $lessonStartTime ~ $lessonEndTime');
+      
+      // v2_priced_ts 테이블에서 해당 날짜, 회원의 타석 예약 조회
+      final tsReservations = await ApiService.getData(
+        table: 'v2_priced_TS',
+        where: [
+          {'field': 'branch_id', 'operator': '=', 'value': branchId},
+          {'field': 'member_id', 'operator': '=', 'value': memberId},  // 정수형으로 전달
+          {'field': 'ts_date', 'operator': '=', 'value': lessonDate},
+        ],
+        orderBy: [
+          {'field': 'ts_start', 'direction': 'ASC'},
+        ],
+      );
+      
+      print('📊 [타석예약현황] 조회 결과: ${tsReservations.length}건');
+      
+      // 레슨 시간을 포함하고, 취소/환불이 아닌 타석 예약만 필터링
+      final filteredReservations = tsReservations.where((ts) {
+        final tsStatus = ts['ts_status']?.toString() ?? '';
+        
+        // 취소, 환불 등의 상태는 제외
+        if (tsStatus.contains('취소') || tsStatus.contains('환불') || 
+            tsStatus.contains('삭제') || tsStatus.contains('실패')) {
+          return false;
+        }
+        
+        // 타석 예약 시간이 레슨 시간을 포함하는지 확인
+        final tsStart = ts['ts_start']?.toString().substring(0, 5) ?? '';
+        final tsEnd = ts['ts_end']?.toString().substring(0, 5) ?? '';
+        
+        // 레슨 시작시간이 타석 예약 시간 범위 내에 있는지 확인
+        // (타석 시작 <= 레슨 시작) AND (레슨 시작 < 타석 종료)
+        final lessonStartInRange = tsStart.compareTo(lessonStartTime) <= 0 && 
+                                   lessonStartTime.compareTo(tsEnd) < 0;
+        
+        // 또는 레슨 종료시간이 타석 예약 시간 범위 내에 있는지 확인
+        // (타석 시작 < 레슨 종료) AND (레슨 종료 <= 타석 종료)
+        final lessonEndInRange = tsStart.compareTo(lessonEndTime) < 0 && 
+                                 lessonEndTime.compareTo(tsEnd) <= 0;
+        
+        // 또는 타석 예약이 레슨 시간을 완전히 포함하는지 확인
+        final tsContainsLesson = tsStart.compareTo(lessonStartTime) <= 0 && 
+                                 lessonEndTime.compareTo(tsEnd) <= 0;
+        
+        return lessonStartInRange || lessonEndInRange || tsContainsLesson;
+      }).toList();
+      
+      print('✅ [타석예약현황] 필터링 후: ${filteredReservations.length}건');
+      for (var ts in filteredReservations) {
+        print('   - ${ts['ts_id']}번 타석: ${ts['ts_start']} ~ ${ts['ts_end']} (${ts['ts_status']})');
+      }
+      
+      if (mounted) {
+        setState(() {
+          _relatedTsReservations = filteredReservations;
+          _isLoadingTsReservations = false;
+        });
+      }
+    } catch (e) {
+      print('❌ [타석예약현황] 조회 오류: $e');
+      if (mounted) {
+        setState(() {
+          _relatedTsReservations = [];
+          _isLoadingTsReservations = false;
+        });
+      }
+    }
   }
 
   void _handleStationMoveSuccess(String newReservationId, int newTsId) async {
@@ -2095,6 +2236,12 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
                       ),
                     ],
                     
+                    // 타석 예약 현황 (레슨 예약만, 취소되지 않은 경우)
+                    if (isLessonType && !isCancelled) ...[
+                      const SizedBox(height: 20),
+                      _buildTsReservationStatus(reservation),
+                    ],
+
                     // 금액 (타석만)
                     if (!isLessonType && !isProgramType && (reservation['amount'] ?? 0) > 0) ...[
                       const SizedBox(height: 16),
@@ -2190,6 +2337,206 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> with 
           );
         },
       );
+  }
+
+  /// 타석 예약 현황 위젯 (레슨 예약 시 표시)
+  Widget _buildTsReservationStatus(Map<String, dynamic> reservation) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.sports_golf, size: 20, color: Colors.blue[700]),
+              const SizedBox(width: 8),
+              Text(
+                '타석 예약 현황',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[800],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // 로딩 중
+          if (_isLoadingTsReservations) ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.blue[600],
+                  ),
+                ),
+              ),
+            ),
+          ]
+          // 타석 예약이 있는 경우
+          else if (_relatedTsReservations != null && _relatedTsReservations!.isNotEmpty) ...[
+            ..._relatedTsReservations!.map((ts) {
+              final tsId = ts['ts_id']?.toString() ?? '';
+              final tsStart = ts['ts_start']?.toString().substring(0, 5) ?? '';
+              final tsEnd = ts['ts_end']?.toString().substring(0, 5) ?? '';
+              
+              // 이용 시간(분) 계산
+              int durationMinutes = 0;
+              try {
+                final startParts = tsStart.split(':');
+                final endParts = tsEnd.split(':');
+                final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+                final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+                durationMinutes = endMinutes - startMinutes;
+              } catch (e) {
+                durationMinutes = 0;
+              }
+              
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[100]!),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[600],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '$tsId번',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '$tsStart ~ $tsEnd (${durationMinutes}분)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.check_circle,
+                      size: 20,
+                      color: Colors.green[600],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ]
+          // 타석 예약이 없는 경우
+          else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 32,
+                    color: Colors.blue[400],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '레슨 시간에 예약된 타석이 없습니다',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // 레슨 날짜와 시작 시간 추출
+                        final lessonDate = DateTime.parse(reservation['date']);
+                        final lessonStartTime = reservation['startTime']?.toString() ?? '';
+                        
+                        // reservation 객체에서 회원 정보 가져오기
+                        final memberId = reservation['memberId']?.toString() ?? '';
+                        final memberName = reservation['memberName']?.toString() ?? '';
+                        final currentBranchId = ApiService.getCurrentBranchId();
+                        
+                        // 회원 정보 객체 생성 (Step에서 필요한 최소 정보)
+                        final memberInfo = memberId.isNotEmpty ? {
+                          'member_id': int.tryParse(memberId) ?? memberId,
+                          'name': memberName,
+                        } : null;
+                        
+                        print('🔍 [타석예약이동] memberInfo: $memberInfo');
+                        print('🔍 [타석예약이동] currentBranchId: $currentBranchId');
+                        print('🔍 [타석예약이동] lessonDate: $lessonDate');
+                        print('🔍 [타석예약이동] lessonStartTime: $lessonStartTime');
+                        
+                        // 현재 다이얼로그 닫기
+                        Navigator.of(context).pop();
+
+                        // MainPage의 예약 탭(index 2)으로 이동 - push 사용하여 뒤로가기 시 조회 페이지로 복귀 가능
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => MainPage(
+                              initialIndex: 2, // 예약 탭
+                              initialReservationType: 'ts_reservation',
+                              initialDate: lessonDate,
+                              initialTime: lessonStartTime,
+                              selectedMember: memberInfo, // 회원 정보 전달
+                              branchId: currentBranchId, // 브랜치 정보 전달
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text(
+                        '타석 예약하기',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildInfoRow({

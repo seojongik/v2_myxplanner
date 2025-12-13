@@ -146,9 +146,14 @@ class _SpStep2SelectProState extends State<SpStep2SelectPro> {
       final memberData = widget.selectedMember ?? ApiService.getCurrentUser();
       if (memberData != null && memberData['member_id'] != null) {
         final memberId = memberData['member_id'].toString();
+        final programId = widget.specialSettings['program_id']?.toString();
         print('✅ [프로선택] 회원 ID 확인: $memberId');
+        print('✅ [프로선택] 프로그램 ID로 필터링: $programId');
 
-        final result = await ApiService.getMemberLsCountingDataForProgram(memberId: memberId);
+        final result = await ApiService.getMemberLsCountingDataForProgram(
+          memberId: memberId,
+          programId: programId,
+        );
 
         if (result['success'] == true && result['debug_info'] != null) {
           final debugInfo = result['debug_info'] as Map<String, dynamic>;

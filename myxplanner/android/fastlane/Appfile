@@ -1,0 +1,8 @@
+# Google Play Console 앱 정보
+# ACCOUNT_INFO_MYGOLFPLANNER.md에서 확인 가능
+
+# 패키지명
+package_name("app.mygolfplanner")
+
+# JSON 키 파일 경로 (Google Play Console API 키)
+# json_key_file("fastlane/api-key.json")  # 필요시 설정

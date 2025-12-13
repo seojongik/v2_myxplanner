@@ -1,0 +1,219 @@
+default_platform(:android)
+
+platform :android do
+  # 메타데이터 경로 설정
+  METADATA_PATH = File.expand_path("metadata", __dir__)
+  
+  # Google Play Console API 키 설정
+  def setup_google_play_api_key
+    json_key_path = File.expand_path("api-key.json", __dir__)
+    
+    if File.exist?(json_key_path)
+      UI.success("✅ Google Play Console API 키 사용: #{json_key_path}")
+      return json_key_path
+    else
+      UI.important("⚠️ Google Play Console API 키를 찾을 수 없습니다: #{json_key_path}")
+      UI.important("   Google Play Console → 설정 → API 액세스 → 서비스 계정 생성")
+      UI.important("   JSON 키 파일을 다운로드하여 위 경로에 저장하세요")
+      return nil
+    end
+  end
+  
+  desc "AAB 파일 경로 찾기"
+  def find_aab_path
+    aab_path = File.expand_path("../../build/app/outputs/bundle/release/app-release.aab", __dir__)
+    
+    if File.exist?(aab_path)
+      return aab_path
+    end
+    
+    # 다른 가능한 경로들 확인
+    possible_paths = [
+      File.expand_path("../../build/app/outputs/bundle/release/*.aab", __dir__),
+      File.expand_path("../../build/app/outputs/bundle/*.aab", __dir__)
+    ]
+    
+    possible_paths.each do |pattern|
+      matches = Dir.glob(pattern)
+      return matches.first if matches.any?
+    end
+    
+    UI.user_error!("AAB 파일을 찾을 수 없습니다. 먼저 빌드하세요: flutter build appbundle --release")
+  end
+
+  desc "Flutter 빌드만 (업로드 없이)"
+  lane :build_only do
+    sh("cd ../.. && flutter build appbundle --release")
+    aab_path = find_aab_path
+    UI.success("빌드 완료: #{aab_path}")
+  end
+
+  desc "Flutter 빌드 및 Google Play에 업로드 (제출 없음)"
+  lane :release do
+    # Flutter 빌드 (AAB 생성) - 항상 새로 빌드
+    UI.important("새로운 AAB 빌드를 시작합니다...")
+    sh("cd ../.. && flutter clean && flutter build appbundle --release")
+    
+    # AAB 파일 경로 찾기
+    aab_path = find_aab_path
+    
+    # Google Play Console API 키 설정
+    json_key_path = setup_google_play_api_key
+    
+    if !json_key_path
+      UI.important("")
+      UI.important("=" * 60)
+      UI.important("⚠️ 자동 업로드 실패: Google Play Console API 키가 필요합니다")
+      UI.important("=" * 60)
+      UI.important("📦 AAB 파일 위치:")
+      UI.important("   #{aab_path}")
+      UI.important("")
+      UI.important("💡 업로드 방법:")
+      UI.important("   1. Google Play Console 웹사이트에서 수동 업로드 (가장 간단)")
+      UI.important("      - https://play.google.com/console 접속")
+      UI.important("      - 내 앱 → MyGolfPlanner → 프로덕션 → 새 버전 만들기")
+      UI.important("      - 위 AAB 파일 업로드")
+      UI.important("")
+      UI.important("   2. Google Play Console API 키 설정 (자동화 권장):")
+      UI.important("      - Google Play Console → 설정 → API 액세스")
+      UI.important("      - 새 서비스 계정 생성")
+      UI.important("      - JSON 키 파일 다운로드")
+      UI.important("      - android/fastlane/api-key.json에 저장")
+      UI.important("=" * 60)
+      UI.success("✅ 빌드는 성공적으로 완료되었습니다!")
+      next
+    end
+    
+    begin
+      upload_to_play_store(
+        aab: aab_path,
+        track: "internal",  # internal, alpha, beta, production
+        json_key: json_key_path,  # API 키 파일 경로
+        skip_upload_metadata: true,  # 메타데이터 업로드 건너뛰기
+        skip_upload_images: true,
+        skip_upload_screenshots: true,
+        skip_upload_changelogs: true  # changelog도 건너뛰기
+      )
+      UI.success("✅ Google Play에 업로드 완료!")
+      UI.important("📝 참고: Google Play Console에서 수동으로 제출해야 합니다.")
+      UI.success("📱 Google Play Console에서 확인하세요: https://play.google.com/console")
+    rescue => e
+      UI.important("")
+      UI.important("=" * 60)
+      UI.important("⚠️ 자동 업로드 실패: #{e.message}")
+      UI.important("=" * 60)
+      UI.important("📦 AAB 파일 위치:")
+      UI.important("   #{aab_path}")
+      UI.important("")
+      UI.important("💡 업로드 방법:")
+      UI.important("   1. Google Play Console 웹사이트에서 수동 업로드")
+      UI.important("   2. Google Play Console API 키 설정 (자동화 권장)")
+      UI.important("=" * 60)
+      UI.success("✅ 빌드는 성공적으로 완료되었습니다!")
+    end
+  end
+
+  desc "Flutter 빌드 및 Google Play에 자동 제출 (리뷰 제출 포함)"
+  lane :submit do
+    # Flutter 빌드 (AAB 생성) - 항상 새로 빌드
+    UI.important("새로운 AAB 빌드를 시작합니다...")
+    sh("cd ../.. && flutter clean && flutter build appbundle --release")
+    
+    # AAB 파일 경로 찾기
+    aab_path = find_aab_path
+    
+    # Google Play Console API 키 설정
+    json_key_path = setup_google_play_api_key
+    
+    if !json_key_path
+      UI.important("")
+      UI.important("=" * 60)
+      UI.important("⚠️ 자동 업로드 실패: Google Play Console API 키가 필요합니다")
+      UI.important("=" * 60)
+      UI.important("📦 AAB 파일 위치:")
+      UI.important("   #{aab_path}")
+      UI.important("")
+      UI.important("💡 업로드 방법:")
+      UI.important("   1. Google Play Console 웹사이트에서 수동 업로드 (가장 간단)")
+      UI.important("      - https://play.google.com/console 접속")
+      UI.important("      - 내 앱 → MyGolfPlanner → 프로덕션 → 새 버전 만들기")
+      UI.important("      - 위 AAB 파일 업로드")
+      UI.important("")
+      UI.important("   2. Google Play Console API 키 설정 (자동화 권장):")
+      UI.important("      - Google Play Console → 설정 → API 액세스")
+      UI.important("      - 새 서비스 계정 생성")
+      UI.important("      - JSON 키 파일 다운로드")
+      UI.important("      - android/fastlane/api-key.json에 저장")
+      UI.important("=" * 60)
+      UI.success("✅ 빌드는 성공적으로 완료되었습니다!")
+      next
+    end
+    
+    begin
+      upload_to_play_store(
+        aab: aab_path,
+        track: "production",  # production 트랙에 제출
+        json_key: json_key_path,  # API 키 파일 경로
+        skip_upload_metadata: true,  # 메타데이터 업로드 건너뛰기 (Invalid request 방지)
+        skip_upload_images: true,
+        skip_upload_screenshots: true,
+        skip_upload_changelogs: true,  # changelog도 건너뛰기
+        changes_not_sent_for_review: false  # 바로 리뷰에 제출
+      )
+      UI.success("✅ Google Play에 업로드 및 제출 완료!")
+      UI.success("📱 리뷰 상태를 Google Play Console에서 확인하세요: https://play.google.com/console")
+    rescue => e
+      UI.important("")
+      UI.important("=" * 60)
+      UI.important("⚠️ 자동 업로드 실패: #{e.message}")
+      UI.important("=" * 60)
+      UI.important("📦 AAB 파일 위치:")
+      UI.important("   #{aab_path}")
+      UI.important("")
+      UI.important("💡 업로드 방법:")
+      UI.important("   1. Google Play Console 웹사이트에서 수동 업로드")
+      UI.important("   2. Google Play Console API 키 설정 (자동화 권장)")
+      UI.important("=" * 60)
+      UI.success("✅ 빌드는 성공적으로 완료되었습니다!")
+    end
+  end
+
+  desc "내부 테스트 트랙에 배포"
+  lane :internal do
+    # Flutter 빌드 (AAB 생성) - 항상 새로 빌드
+    UI.important("새로운 AAB 빌드를 시작합니다...")
+    sh("cd ../.. && flutter clean && flutter build appbundle --release")
+    
+    # AAB 파일 경로 찾기
+    aab_path = find_aab_path
+    
+    # Google Play Console API 키 설정
+    json_key_path = setup_google_play_api_key
+    
+    if !json_key_path
+      UI.important("⚠️ 자동 업로드 실패: Google Play Console API 키가 필요합니다")
+      UI.important("📦 AAB 파일 위치: #{aab_path}")
+      UI.important("💡 Google Play Console 웹사이트에서 수동 업로드하거나 API 키를 설정하세요")
+      UI.success("✅ 빌드는 성공적으로 완료되었습니다!")
+      return
+    end
+    
+    begin
+      upload_to_play_store(
+        aab: aab_path,
+        track: "internal",  # 내부 테스트 트랙
+        json_key: json_key_path,  # API 키 파일 경로
+        skip_upload_metadata: true,  # 메타데이터 업로드 건너뛰기
+        skip_upload_images: true,
+        skip_upload_screenshots: true,
+        skip_upload_changelogs: true  # changelog도 건너뛰기
+      )
+      UI.success("✅ 내부 테스트 트랙에 업로드 완료!")
+      UI.success("📱 Google Play Console에서 확인하세요: https://play.google.com/console")
+    rescue => e
+      UI.important("⚠️ 자동 업로드 실패: #{e.message}")
+      UI.important("📦 AAB 파일 위치: #{aab_path}")
+      UI.success("✅ 빌드는 성공적으로 완료되었습니다!")
+    end
+  end
+end

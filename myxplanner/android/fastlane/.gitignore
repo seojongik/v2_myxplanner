@@ -1,0 +1,15 @@
+# Google Play Console API 키
+api-key.json
+*.json
+
+# 환경 변수
+.env
+.env.local
+
+# 빌드 아티팩트
+*.aab
+*.apk
+
+# Fastlane 보고서
+report.xml
+*.html

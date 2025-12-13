@@ -21,7 +21,7 @@
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>12</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -57,6 +57,39 @@
 				<string>mygolfplanner.app</string>
 			</array>
 		</dict>
+	</array>
+	<!-- 외부 앱 스킴 쿼리 허용 (카드사 앱, 간편결제 앱 등) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<!-- 카드사 앱 -->
+		<string>hdcardappcardansimclick</string>
+		<string>shinhancardapp</string>
+		<string>kb-acp</string>
+		<string>lottemembersapp</string>
+		<string>nhappvardansimclick</string>
+		<string>wooripay</string>
+		<string>hanawalletmembers</string>
+		<string>citimobileapp</string>
+		<string>supertoss</string>
+		<string>kftc-bankpay</string>
+		<string>ispmobile</string>
+		<!-- 간편결제 앱 -->
+		<string>kakaotalk</string>
+		<string>kakaopay</string>
+		<string>payco</string>
+		<string>naversearchapp</string>
+		<string>naversearchthirdlogin</string>
+		<string>naversearchapplogin</string>
+		<string>nhappvardansimclick</string>
+		<string>shinhancardapp</string>
+		<string>kb-acp</string>
+		<string>lottemembersapp</string>
+		<string>wooripay</string>
+		<string>hanawalletmembers</string>
+		<string>citimobileapp</string>
+		<string>supertoss</string>
+		<string>kftc-bankpay</string>
+		<string>ispmobile</string>
 	</array>
 </dict>
 </plist>
